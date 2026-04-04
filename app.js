@@ -1,31 +1,5 @@
 initMap();
 
-async function createProfile() {
-  const name = document.getElementById("nameInput").value.trim() || "Player";
-  const profile = await apiPost("/profile/create", { name });
-  profileId = profile.id;  // <-- store this
-  alert(`Profile created! Your ID: ${profileId}`);
-}
-
-async function createGameFromInput() {
-  const inputGameId = document.getElementById("gameIdInput").value.trim();
-  if (!inputGameId) return alert("Please enter a game ID.");
-  if (!profileId) return alert("Please create a profile first.");
-
-  gameId = inputGameId;
-
-  try {
-    const game = await apiPost("/game/create", {
-      gameId,
-      hostId: profileId
-    });
-    showScreen("hostScreen");
-  } catch (e) {
-    console.error("Create game failed:", e);
-    alert("Failed to create game. Check console.");
-  }
-}
-
 async function createGame(gameId) {
   return await apiPost("/game/create", { gameId });
 }
@@ -71,6 +45,32 @@ navigator.geolocation.watchPosition(pos => {
 
 let profileId = null;
 let gameId = null;
+
+async function createProfile() {
+  const name = document.getElementById("nameInput").value.trim() || "Player";
+  const profile = await apiPost("/profile/create", { name });
+  profileId = profile.id;
+  alert(`Profile created! Your ID: ${profileId}`);
+}
+
+async function createGameFromInput() {
+  const inputGameId = document.getElementById("gameIdInput").value.trim();
+  if (!inputGameId) return alert("Please enter a game ID.");
+  if (!profileId) return alert("Please create a profile first.");
+
+  gameId = inputGameId;
+
+  try {
+    const game = await apiPost("/game/create", {
+      gameId,
+      hostId: profileId
+    });
+    showScreen("hostScreen");
+  } catch (e) {
+    console.error("Create game failed:", e);
+    alert("Failed to create game. Check console.");
+  }
+}
 
 function showScreen(screenId) {
   ["homeScreen", "waitingScreen", "hiderScreen", "seekerScreen", "hostScreen"].forEach(id => {
@@ -126,11 +126,3 @@ function renderHostPlayerList(state) {
 
 // Start polling
 setInterval(pollGameState, 1000);
-
-// Example: creating a game with host
-async function createGameFromInput() {
-  const inputGameId = document.getElementById("gameIdInput").value;
-  gameId = inputGameId;
-  const game = await apiPost("/game/create", { gameId, hostId: profileId });
-  showScreen("hostScreen");
-}
