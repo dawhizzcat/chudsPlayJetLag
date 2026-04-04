@@ -1,39 +1,63 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0d0d1f">
   <title>Jet Lag IRL</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 </head>
 <body>
 
-<div id="menu">
-  <input id="nameInput" placeholder="Enter name">
-  <button onclick="createProfile()">Create Profile</button>
-  <input id="gameIdInput" placeholder="Game ID">
-  <button onclick="createGameFromInput()">Create Game</button>
-  <button onclick="joinGame()">Join Game</button>
-</div>
+<!-- Splash / Login Screen -->
+<div id="splashScreen">
+  <div class="splash-inner">
+    <div class="splash-logo">
+      <div class="splash-icon">🛰️</div>
+      <h1>Jet Lag IRL</h1>
+      <p>Large-scale hide &amp; seek</p>
+    </div>
 
-<!-- Home screen covers the map until in-game -->
-<div id="homeScreen" style="display:block;">
-  <div class="home-title">
-    <h1>🛰️ Jet Lag IRL</h1>
-    <p>Create a profile and join or start a game below.</p>
+    <div class="splash-form">
+      <div class="form-group">
+        <label class="form-label">Your Name</label>
+        <input id="nameInput" type="text" placeholder="Enter your name"
+               autocomplete="off" autocorrect="off" spellcheck="false">
+        <button class="btn btn-secondary" onclick="createProfile()">Create Profile</button>
+      </div>
+
+      <div class="form-divider"><span>then</span></div>
+
+      <div class="form-group">
+        <label class="form-label">Game ID</label>
+        <input id="gameIdInput" type="text" placeholder="Enter game code"
+               autocomplete="off" autocorrect="off" spellcheck="false">
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="createGameFromInput()">Create Game</button>
+          <button class="btn btn-outline" onclick="joinGame()">Join Game</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
+<!-- Waiting screen -->
 <div id="waitingScreen" style="display:none;">
   <div class="screen-card">
+    <div class="waiting-icon">⏳</div>
     <h2>Waiting for host...</h2>
+    <p class="screen-subtitle">The host will start the game soon.</p>
   </div>
 </div>
 
+<!-- Host lobby screen -->
 <div id="hostScreen" style="display:none;">
-  <div class="screen-card">
-    <h2>Lobby</h2>
+  <div class="screen-card scrollable">
+    <h2>🎮 Lobby</h2>
 
-    <!-- Scores leaderboard -->
     <div id="scoresPanel" class="scores-panel">
       <h3>🏆 Hider Times</h3>
       <div id="scoresList"><p class="empty-msg">No rounds played yet.</p></div>
@@ -41,22 +65,24 @@
 
     <hr class="panel-divider">
 
-    <label>Hide Time (seconds)
-      <input id="hideTimeInput" type="number" value="30" min="1">
+    <label class="form-label">Hide Time (seconds)
+      <input id="hideTimeInput" type="number" value="30" min="1" inputmode="numeric">
     </label>
-    <label>Play Area (miles, side length)
-      <input id="playAreaInput" type="number" value="1" min="0.1" step="0.1">
+    <label class="form-label">Play Area (miles, side length)
+      <input id="playAreaInput" type="number" value="1" min="0.1" step="0.1" inputmode="decimal">
     </label>
-    <p class="label">Select a hider:</p>
+
+    <p class="section-label">Select a hider:</p>
     <div id="hostPlayerList"></div>
-    <button id="startGameBtn" style="display:none;" onclick="startGameRound()">Start Game</button>
+    <button id="startGameBtn" style="display:none;" class="btn btn-start" onclick="startGameRound()">🚀 Start Game</button>
   </div>
 </div>
 
 <!-- Hider: counting down while hiding -->
 <div id="hiderScreen" style="display:none;">
   <div class="screen-card">
-    <h2>You are the Hider!</h2>
+    <h2>🙈 You are the Hider!</h2>
+    <p class="screen-subtitle">Go hide before the timer runs out!</p>
     <div class="timer-display">
       <span id="hideTimerHider">0</span>
       <span class="timer-label">seconds to hide</span>
@@ -64,10 +90,11 @@
   </div>
 </div>
 
-<!-- Seeker: waiting for hide phase to end -->
+<!-- Seeker: waiting -->
 <div id="seekerScreen" style="display:none;">
   <div class="screen-card">
-    <h2>You are a Seeker</h2>
+    <h2>🔍 You are a Seeker</h2>
+    <p class="screen-subtitle">Wait for the hider to hide...</p>
     <div class="timer-display">
       <span id="hideTimerSeeker">0</span>
       <span class="timer-label">seconds until hunt begins</span>
@@ -75,57 +102,51 @@
   </div>
 </div>
 
-<!-- Hider seek screen: shown after hide timer ends, hider sees questions + cards -->
+<!-- Hider seek screen -->
 <div id="hiderSeekScreen" style="display:none;">
-
-  <!-- Elapsed clock top-left -->
   <div class="elapsed-badge">
     <span class="elapsed-icon">⏱</span>
     <span id="elapsedHider">0:00</span>
     <span class="elapsed-label">hidden</span>
-    <span id="bonusBadge" style="display:none;" class="bonus-badge">+<span id="bonusSeconds">0</span>s bonus</span>
+    <span id="bonusBadge" style="display:none;" class="bonus-badge">+<span id="bonusSeconds">0</span>s</span>
   </div>
 
-  <!-- Unanswered questions -->
-  <div id="hiderQuestions" class="hider-panel hider-questions-panel">
-    <h3>❓ Incoming Questions</h3>
-    <div id="hiderQuestionList"><p class="empty-msg">No questions yet...</p></div>
+  <div class="hider-scroll-area">
+    <div class="hider-panel">
+      <h3>❓ Incoming Questions</h3>
+      <div id="hiderQuestionList"><p class="empty-msg">No questions yet...</p></div>
+    </div>
+    <div class="hider-panel">
+      <h3>🃏 Your Cards</h3>
+      <div id="hiderCardList"><p class="empty-msg">Cards are dealt when seekers ask questions.</p></div>
+    </div>
   </div>
-
-  <!-- Card hand -->
-  <div id="hiderCards" class="hider-panel hider-cards-panel">
-    <h3>🃏 Your Cards</h3>
-    <div id="hiderCardList"><p class="empty-msg">Cards are dealt when seekers ask questions.</p></div>
-  </div>
-
 </div>
 
-<!-- Seek phase: full map with overlaid UI for seekers -->
+<!-- Seek phase: map + overlaid UI -->
 <div id="seekMapScreen" style="display:none;">
 
-  <!-- Elapsed clock top-left -->
   <div class="elapsed-badge">
     <span class="elapsed-icon">⏱</span>
     <span id="elapsedSeeker">0:00</span>
-    <span class="elapsed-label">hider hidden</span>
+    <span class="elapsed-label">hidden</span>
   </div>
 
-  <!-- Question button -->
-  <button class="question-btn" onclick="toggleQuestionMenu()">❓ Ask Question</button>
+  <button class="question-btn" onclick="toggleQuestionMenu()">❓ Ask</button>
 
-  <!-- Found hider button -->
   <button class="found-btn" onclick="foundHider()">🎯 Found Hider!</button>
 
-  <!-- Question panel -->
   <div id="questionPanel" style="display:none;" class="question-panel">
-    <h3>Ask the Hider</h3>
+    <div class="question-panel-header">
+      <h3>Ask the Hider</h3>
+      <button class="panel-close-btn" onclick="toggleQuestionMenu()">✕</button>
+    </div>
     <div id="questionList"></div>
-    <hr>
-    <h4>Previous Questions</h4>
+    <hr class="panel-divider">
+    <h4 class="panel-section-label">Previous Questions</h4>
     <div id="questionLog"></div>
   </div>
 
-  <!-- Challenge overlay: blocks seekers until completed -->
   <div id="challengeOverlay" style="display:none;" class="challenge-overlay">
     <div class="challenge-card">
       <div class="challenge-icon">⚔️</div>
@@ -138,7 +159,6 @@
 
 </div>
 
-<!-- Map always in DOM -->
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -153,7 +173,6 @@
     QUESTIONS.forEach(q => {
       const btn = document.createElement("button");
       btn.className = "question-option";
-      // Mark auto questions visually
       const isAuto = q.toLowerCase().includes("of me");
       btn.textContent = q + (isAuto ? " ⚡" : "");
       btn.onclick = () => askQuestion(q);
