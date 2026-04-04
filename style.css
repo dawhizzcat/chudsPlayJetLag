@@ -1,13 +1,313 @@
+/* ---- Reset & Base ---- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ---- Map ---- */
+#map {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+}
+
+/* ---- Menu ---- */
 #menu {
   position: absolute;
   bottom: 10px;
   left: 10px;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 10px;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #111;
+  padding: 12px;
+  border-radius: 10px;
   z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  min-width: 180px;
 }
+
 #menu input, #menu button {
   display: block;
+  width: 100%;
   margin: 5px 0;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
 }
+
+#menu button {
+  background: #2563eb;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+#menu button:hover { background: #1d4ed8; }
+
+/* ---- Screen Cards (lobby/waiting/hider/seeker) ---- */
+#waitingScreen,
+#hostScreen,
+#hiderScreen,
+#seekerScreen {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 30, 0.88);
+  backdrop-filter: blur(4px);
+}
+
+.screen-card {
+  background: #1e1e3a;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 32px 40px;
+  text-align: center;
+  min-width: 280px;
+  max-width: 420px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+
+.screen-card h2 {
+  font-size: 1.6rem;
+  margin-bottom: 20px;
+  color: #fff;
+}
+
+.screen-card label {
+  display: block;
+  margin: 12px 0;
+  font-size: 14px;
+  color: #aaa;
+  text-align: left;
+}
+
+.screen-card input[type="number"] {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a4a;
+  color: #eee;
+  font-size: 16px;
+}
+
+.screen-card .label {
+  font-size: 13px;
+  color: #888;
+  margin: 16px 0 8px;
+  text-align: left;
+}
+
+.screen-card button {
+  margin: 6px 0;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  background: #2563eb;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+}
+
+.screen-card button:hover { background: #1d4ed8; }
+
+#startGameBtn {
+  margin-top: 16px;
+  background: #16a34a !important;
+}
+#startGameBtn:hover { background: #15803d !important; }
+
+/* ---- Timer ---- */
+.timer-display {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.timer-display span:first-child {
+  font-size: 4rem;
+  font-weight: 800;
+  color: #facc15;
+  line-height: 1;
+}
+
+.timer-label {
+  font-size: 13px;
+  color: #999;
+}
+
+/* ---- Seek Map Screen ---- */
+#seekMapScreen {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 200;
+  pointer-events: none; /* let map clicks through */
+}
+
+#seekMapScreen > * {
+  pointer-events: all;
+}
+
+/* ---- Question Button ---- */
+.question-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  z-index: 210;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.question-btn:hover {
+  background: #1d4ed8;
+  transform: scale(1.04);
+}
+
+/* ---- Question Panel ---- */
+.question-panel {
+  position: absolute;
+  top: 64px;
+  right: 16px;
+  width: 300px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #1e1e3a;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  padding: 20px;
+  z-index: 210;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.question-panel h3 {
+  font-size: 1rem;
+  color: #fff;
+  margin-bottom: 12px;
+}
+
+.question-panel h4 {
+  font-size: 0.85rem;
+  color: #888;
+  margin: 12px 0 8px;
+}
+
+.question-panel hr {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  margin: 14px 0;
+}
+
+.question-option {
+  display: block;
+  width: 100%;
+  margin: 5px 0;
+  padding: 9px 12px;
+  background: #2a2a50;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  color: #ddd;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.question-option:hover {
+  background: #3b3b6e;
+}
+
+/* ---- Question Log ---- */
+.question-entry {
+  background: #14142a;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.q-text {
+  display: block;
+  color: #ccc;
+  margin-bottom: 4px;
+}
+
+.q-answer {
+  display: block;
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.q-pending {
+  display: block;
+  color: #facc15;
+  font-style: italic;
+}
+
+/* ---- Player Markers ---- */
+.player-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.marker-dot {
+  width: 14px;
+  height: 14px;
+  background: #2563eb;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
+.marker-label {
+  background: rgba(30,30,58,0.9);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* ---- Host Player List ---- */
+#hostPlayerList button {
+  margin: 5px 0;
+  padding: 9px 14px;
+  background: #374151;
+  border: 1px solid #4b5563;
+  border-radius: 8px;
+  color: #eee;
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+}
+
+#hostPlayerList button:hover { background: #4b5563; }

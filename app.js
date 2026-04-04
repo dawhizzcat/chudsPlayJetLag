@@ -3,12 +3,11 @@ initMap();
 // ---------- Timer ----------
 
 let timerInterval = null;
-let localHideEnd = null; // timestamp (ms) when hiding ends
+let localHideEnd = null;
 
 function startLocalTimer(hideStart, hideTime) {
   const endTime = (hideStart * 1000) + (hideTime * 1000);
 
-  // Only reset if we're more than 2 seconds off
   if (localHideEnd && Math.abs(localHideEnd - endTime) < 2000) return;
   localHideEnd = endTime;
 
@@ -86,9 +85,15 @@ function hideMenu() {
 }
 
 function showScreen(screenId) {
-  ["homeScreen","waitingScreen","hostScreen","hiderScreen","seekerScreen"].forEach(id => {
+  const screens = ["homeScreen","waitingScreen","hostScreen","hiderScreen","seekerScreen","seekMapScreen"];
+  screens.forEach(id => {
     document.getElementById(id).style.display = (id === screenId ? "block" : "none");
   });
+
+  // Invalidate map size when seek map becomes visible so tiles render correctly
+  if (screenId === "seekMapScreen") {
+    setTimeout(() => map.invalidateSize(), 100);
+  }
 }
 
 // ---------- Host Controls ----------
@@ -121,7 +126,6 @@ async function startGameRound() {
     return;
   }
 
-  // Use server-returned hideStart for accuracy
   startLocalTimer(game.game.hideStart, hideTime);
 }
 
@@ -138,7 +142,68 @@ function renderHostPlayerList(game) {
   });
 }
 
+// ---------- Question Menu ----------
+
+const QUESTIONS = [
+  "Are you within 500m of a road?",
+  "Are you indoors?",
+  "Are you within 1km of water?",
+  "Are you on high ground?",
+  "Are you within 500m of a park?",
+  "Are you within 1km of the start point?",
+  "Can you see a landmark?",
+  "Are you moving?",
+];
+
+function toggleQuestionMenu() {
+  const panel = document.getElementById("questionPanel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+}
+
+async function askQuestion(question) {
+  const result = await apiPost("/game/ask_question", {
+    gameId: state.gameId,
+    playerId: state.profile.id,
+    question
+  });
+
+  if (!result || result.error) {
+    alert("Failed to send question.");
+    return;
+  }
+
+  toggleQuestionMenu();
+  renderQuestionLog(state.gameData);
+}
+
+function renderQuestionLog(game) {
+  const log = document.getElementById("questionLog");
+  if (!log || !game.questions) return;
+  log.innerHTML = "";
+  game.questions.slice().reverse().forEach(q => {
+    const el = document.createElement("div");
+    el.className = "question-entry";
+    el.innerHTML = `<span class="q-text">❓ ${q.question}</span>${q.answer ? `<span class="q-answer">→ ${q.answer}</span>` : "<span class='q-pending'>Awaiting answer...</span>"}`;
+    log.appendChild(el);
+  });
+}
+
+// ---------- Seeker Map Markers ----------
+
+function updateSeekerMarkers(game) {
+  // Show all seekers (not the hider) on the seek map
+  const seekerPositions = {};
+  for (const [id, pos] of Object.entries(game.positions)) {
+    if (id !== game.hiderId) {
+      seekerPositions[id] = pos;
+    }
+  }
+  updateMarkers(seekerPositions, game.players);
+}
+
 // ---------- Polling ----------
+
+let lastStatus = null;
 
 async function pollState() {
   if (!state.gameId || !state.profile) return;
@@ -147,11 +212,9 @@ async function pollState() {
   if (!game || game.error) return;
   state.gameData = game;
 
-  updateMarkers(game.positions);
-
-  // Sync timer from server if in hide phase (only corrects if drifted >2s)
-  if (game.status === "hide" && game.hideStart && game.hideTime) {
-    startLocalTimer(game.hideStart, game.hideTime);
+  // Timer sync during hide phase
+  if ((game.status === "hide" || game.status === "seek") && game.hideStart && game.hideTime) {
+    if (game.status === "hide") startLocalTimer(game.hideStart, game.hideTime);
   }
 
   // Screen routing
@@ -162,13 +225,27 @@ async function pollState() {
     } else {
       showScreen("waitingScreen");
     }
+
   } else if (game.status === "hide") {
     if (game.hiderId === state.profile.id) {
       showScreen("hiderScreen");
     } else {
       showScreen("seekerScreen");
     }
+
+  } else if (game.status === "seek") {
+    if (game.hiderId === state.profile.id) {
+      // Hider just waits
+      showScreen("hiderScreen");
+      document.querySelector("#hiderScreen h2").textContent = "Seekers are hunting you!";
+    } else {
+      showScreen("seekMapScreen");
+      updateSeekerMarkers(game);
+      renderQuestionLog(game);
+    }
   }
+
+  lastStatus = game.status;
 }
 
 setInterval(pollState, 5000);

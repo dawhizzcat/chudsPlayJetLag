@@ -7,7 +7,7 @@
 </head>
 <body>
 
-<div id="menu" style="position: absolute; bottom: 10px; left: 10px;">
+<div id="menu">
   <input id="nameInput" placeholder="Enter name">
   <button onclick="createProfile()">Create Profile</button>
 
@@ -19,29 +19,64 @@
 <!-- Screens -->
 <div id="homeScreen" style="display:block;"></div>
 
-<div id="waitingScreen" style="display:none; text-align:center;">
-  <h2>Waiting for host...</h2>
+<div id="waitingScreen" style="display:none;">
+  <div class="screen-card">
+    <h2>Waiting for host...</h2>
+  </div>
 </div>
 
-<div id="hostScreen" style="display:none; text-align:center;">
-  <h2>Lobby: Select Hider</h2>
-  <div>
-    Hide Time (seconds): <input id="hideTimeInput" type="number" value="30" min="1">
+<div id="hostScreen" style="display:none;">
+  <div class="screen-card">
+    <h2>Lobby</h2>
+    <label>Hide Time (seconds)
+      <input id="hideTimeInput" type="number" value="30" min="1">
+    </label>
+    <p class="label">Select a hider:</p>
+    <div id="hostPlayerList"></div>
+    <button id="startGameBtn" style="display:none;" onclick="startGameRound()">Start Game</button>
   </div>
-  <div id="hostPlayerList"></div>
-  <button id="startGameBtn" style="display:none;" onclick="startGameRound()">Start Game</button>
 </div>
 
 <div id="hiderScreen" style="display:none;">
-  <h2>You are the Hider!</h2>
-  <div>Hide time remaining: <span id="hideTimerHider">0</span>s</div>
+  <div class="screen-card">
+    <h2>You are the Hider!</h2>
+    <div class="timer-display">
+      <span id="hideTimerHider">0</span>
+      <span class="timer-label">seconds to hide</span>
+    </div>
+  </div>
 </div>
 
 <div id="seekerScreen" style="display:none;">
-  <h2>You are a Seeker</h2>
-  <div>Hide time remaining: <span id="hideTimerSeeker">0</span>s</div>
+  <div class="screen-card">
+    <h2>You are a Seeker</h2>
+    <div class="timer-display">
+      <span id="hideTimerSeeker">0</span>
+      <span class="timer-label">seconds until hunt begins</span>
+    </div>
+  </div>
 </div>
 
+<!-- Seek phase: full map with overlaid UI -->
+<div id="seekMapScreen" style="display:none;">
+
+  <!-- Question button -->
+  <button class="question-btn" onclick="toggleQuestionMenu()">❓ Ask Question</button>
+
+  <!-- Question panel -->
+  <div id="questionPanel" style="display:none;" class="question-panel">
+    <h3>Ask the Hider</h3>
+    <div id="questionList">
+      <!-- Populated by JS -->
+    </div>
+    <hr>
+    <h4>Previous Questions</h4>
+    <div id="questionLog"></div>
+  </div>
+
+</div>
+
+<!-- Map always in DOM so Leaflet stays initialized -->
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -49,6 +84,20 @@
 <script src="state.js"></script>
 <script src="map.js"></script>
 <script src="app.js"></script>
+
+<script>
+  // Populate question buttons from QUESTIONS array after scripts load
+  window.addEventListener("load", () => {
+    const list = document.getElementById("questionList");
+    QUESTIONS.forEach(q => {
+      const btn = document.createElement("button");
+      btn.className = "question-option";
+      btn.textContent = q;
+      btn.onclick = () => askQuestion(q);
+      list.appendChild(btn);
+    });
+  });
+</script>
 
 </body>
 </html>
