@@ -258,6 +258,9 @@ function routeToScreen(game) {
       if (game.playAreaCenter && game.playAreaMiles) {
         updatePlayArea(game.playAreaCenter, game.playAreaMiles);
       }
+      // Car mode badge
+      const carBadge = document.getElementById("carModeBadge");
+      if (carBadge) carBadge.style.display = game.carMode ? "flex" : "none";
     }
   }
   lastRoutedStatus = game.status;
@@ -279,10 +282,11 @@ async function startGameRound() {
 
   const hideTime = parseInt(document.getElementById("hideTimeInput").value) * 60;
   const playAreaMiles = parseFloat(document.getElementById("playAreaInput").value) || null;
+  const carMode = document.getElementById("carModeToggle").checked;
 
   await apiPost("/game/select_hider", {
     gameId: state.gameId, hiderId: selectedHiderId,
-    hostId: state.profile.id, hideTime, playAreaMiles
+    hostId: state.profile.id, hideTime, playAreaMiles, carMode
   });
 
   const isHider = selectedHiderId === state.profile.id;

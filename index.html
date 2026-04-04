@@ -72,6 +72,14 @@
       <input id="playAreaInput" type="number" value="1" min="0.1" step="0.1" inputmode="decimal">
     </label>
 
+    <label class="form-label toggle-row">
+      Car Mode 🚗
+      <div class="toggle-wrap">
+        <input type="checkbox" id="carModeToggle" class="toggle-input">
+        <span class="toggle-slider"></span>
+      </div>
+    </label>
+
     <p class="section-label">Select a hider:</p>
     <div id="hostPlayerList"></div>
     <button id="startGameBtn" style="display:none;" class="btn btn-start" onclick="startGameRound()">🚀 Start Game</button>
@@ -132,6 +140,8 @@
     <span id="elapsedSeeker">0:00</span>
     <span class="elapsed-label">hidden</span>
   </div>
+
+  <div id="carModeBadge" style="display:none;" class="car-mode-badge">🚗 Car Mode</div>
 
   <button class="question-btn" onclick="toggleQuestionMenu()">❓ Ask</button>
 
