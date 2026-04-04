@@ -5,11 +5,11 @@ async function createGame(gameId) {
 }
 
 async function joinGame() {
-  const gameId = document.getElementById("gameIdInput").value;
-  const player = state.profile;
+  if (!state.profile) return alert("Create a profile first!");
+  const gameId = document.getElementById("gameIdInput").value.trim();
+  if (!gameId) return alert("Enter a game ID!");
 
-  const game = await apiPost("/game/join", { gameId, player });
-
+  const game = await apiPost("/game/join", { gameId, player: state.profile });
   state.gameId = gameId;
 }
 
@@ -50,6 +50,7 @@ async function createProfile() {
   const name = document.getElementById("nameInput").value.trim() || "Player";
   const profile = await apiPost("/profile/create", { name });
   profileId = profile.id;
+  state.profile = profile; // <-- store the whole profile object
   alert(`Profile created! Your ID: ${profileId}`);
 }
 
@@ -73,8 +74,8 @@ async function createGameFromInput() {
 }
 
 function showScreen(screenId) {
-  ["homeScreen", "waitingScreen", "hiderScreen", "seekerScreen", "hostScreen"].forEach(id => {
-    document.getElementById(id).style.display = (id === screenId) ? "block" : "none";
+  ["homeScreen","waitingScreen","hostScreen","hiderScreen","seekerScreen"].forEach(id => {
+    document.getElementById(id).style.display = (id === screenId ? "block" : "none");
   });
 }
 
