@@ -19,7 +19,8 @@ function startLocalTimer(hideStart, hideTime) {
     document.getElementById("hideTimerSeeker").textContent = remaining;
     if (remaining === 0) {
       clearInterval(timerInterval);
-      pollState(); // immediately sync with server on expiry
+      console.log("[TIMER] Hit 0, firing pollState");
+      pollState();
     }
   }, 1000);
 }
@@ -213,6 +214,7 @@ async function pollState() {
 
   const game = await apiGet(`/state/${state.gameId}`);
   if (!game || game.error) return;
+  console.log("[POLL] status:", game.status, "hideStart:", game.hideStart, "hideTime:", game.hideTime);
   state.gameData = game;
 
   // Timer sync during hide phase
