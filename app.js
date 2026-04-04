@@ -220,12 +220,17 @@ function showScreen(screenId) {
   }
 }
 
+let lastRoutedStatus = null;
+
 function routeToScreen(game) {
   if (game.status === "lobby") {
     if (game.hostId === state.profile.id) {
-      selectedHiderId = null;
-      const startBtn = document.getElementById("startGameBtn");
-      if (startBtn) startBtn.style.display = "none";
+      // Only reset hider selection when transitioning INTO lobby, not on every poll
+      if (lastRoutedStatus !== "lobby") {
+        selectedHiderId = null;
+        const startBtn = document.getElementById("startGameBtn");
+        if (startBtn) startBtn.style.display = "none";
+      }
       showScreen("hostScreen");
       renderHostPlayerList(game);
     } else {
@@ -255,6 +260,7 @@ function routeToScreen(game) {
       }
     }
   }
+  lastRoutedStatus = game.status;
 }
 
 // ---------- Host Controls ----------
