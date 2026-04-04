@@ -10,7 +10,7 @@ async function createProfile() {
 
 async function createGame(gameId) {
   return await apiPost("/game/create", {
-    gameId: gameId
+    gameId: JSON.stringify({ gameId })
   });
 }
 
