@@ -8,12 +8,9 @@ let elapsedInterval = null;
 
 function startLocalTimer(hideStart, hideTime) {
   const endTime = (hideStart * 1000) + (hideTime * 1000);
-
   if (localHideEnd && Math.abs(localHideEnd - endTime) < 2000) return;
   localHideEnd = endTime;
-
   if (timerInterval) clearInterval(timerInterval);
-
   timerInterval = setInterval(() => {
     const remaining = Math.max(0, Math.floor((localHideEnd - Date.now()) / 1000));
     document.getElementById("hideTimerHider").textContent = remaining;
@@ -26,10 +23,8 @@ function startLocalTimer(hideStart, hideTime) {
   }, 1000);
 }
 
-// Elapsed clock — counts up from hideStart
 function startElapsedClock(hideStart) {
   if (elapsedInterval) clearInterval(elapsedInterval);
-
   elapsedInterval = setInterval(() => {
     const elapsed = Math.floor(Date.now() / 1000 - hideStart);
     const mins = Math.floor(elapsed / 60);
@@ -60,12 +55,7 @@ async function createGameFromInput() {
   if (!inputGameId) return alert("Please enter a game ID.");
   if (!state.profile) return alert("Please create a profile first.");
   state.gameId = inputGameId;
-
-  const game = await apiPost("/game/create", {
-    gameId: state.gameId,
-    hostId: state.profile.id
-  });
-
+  const game = await apiPost("/game/create", { gameId: state.gameId, hostId: state.profile.id });
   if (!game || game.error) {
     alert("Failed to create game: " + (game?.error || "Unknown error"));
     state.gameId = null;
@@ -80,12 +70,10 @@ async function joinGame() {
   const inputGameId = document.getElementById("gameIdInput").value.trim();
   if (!inputGameId) return alert("Enter a game ID!");
   state.gameId = inputGameId;
-
   const game = await apiPost("/game/join", {
     gameId: state.gameId,
     player: { id: state.profile.id, name: state.profile.name }
   });
-
   if (!game || game.error) {
     alert("Failed to join: " + (game?.error || "Unknown error"));
     state.gameId = null;
@@ -125,19 +113,11 @@ async function selectHider(hiderId) {
 
 async function startGameRound() {
   const hideTime = parseInt(document.getElementById("hideTimeInput").value);
-
   await apiPost("/game/select_hider", {
-    gameId: state.gameId,
-    hiderId: selectedHiderId,
-    hostId: state.profile.id,
-    hideTime
+    gameId: state.gameId, hiderId: selectedHiderId,
+    hostId: state.profile.id, hideTime
   });
-
-  const game = await apiPost("/game/start", {
-    gameId: state.gameId,
-    hostId: state.profile.id
-  });
-
+  const game = await apiPost("/game/start", { gameId: state.gameId, hostId: state.profile.id });
   if (!game || game.error) {
     alert("Failed to start: " + (game?.error || "Unknown error"));
     return;
@@ -178,16 +158,10 @@ function toggleQuestionMenu() {
 
 async function askQuestion(question) {
   const result = await apiPost("/game/ask_question", {
-    gameId: state.gameId,
-    playerId: state.profile.id,
-    question
+    gameId: state.gameId, playerId: state.profile.id, question
   });
-  if (!result || result.error) {
-    alert("Failed to send question.");
-    return;
-  }
+  if (!result || result.error) { alert("Failed to send question."); return; }
   toggleQuestionMenu();
-  // Optimistically add to local state so log updates instantly
   if (state.gameData) {
     state.gameData.questions.push(result.question);
     renderQuestionLog(state.gameData);
@@ -208,13 +182,37 @@ function renderQuestionLog(game) {
   });
 }
 
+// ---------- Challenge Overlay (Seekers) ----------
+
+function updateChallengeOverlay(game) {
+  const overlay = document.getElementById("challengeOverlay");
+  const challenge = game.activeChallenge;
+
+  if (challenge) {
+    document.getElementById("challengeName").textContent = challenge.name;
+    document.getElementById("challengeDesc").textContent = challenge.desc;
+    overlay.style.display = "flex";
+  } else {
+    overlay.style.display = "none";
+  }
+}
+
+async function completeChallenge() {
+  const result = await apiPost("/game/complete_challenge", {
+    gameId: state.gameId,
+    playerId: state.profile.id
+  });
+  if (!result || result.error) { alert("Failed to complete challenge."); return; }
+  // Hide overlay immediately, poll will confirm
+  document.getElementById("challengeOverlay").style.display = "none";
+  if (state.gameData) state.gameData.activeChallenge = null;
+}
+
 // ---------- Hider Seek Screen ----------
 
 function renderHiderSeekScreen(game) {
   renderHiderQuestions(game);
   renderHiderCards(game);
-
-  // Bonus time badge
   const bonus = game.bonusTime || 0;
   const badge = document.getElementById("bonusBadge");
   const bonusSec = document.getElementById("bonusSeconds");
@@ -229,12 +227,10 @@ function renderHiderSeekScreen(game) {
 function renderHiderQuestions(game) {
   const container = document.getElementById("hiderQuestionList");
   const unanswered = (game.questions || []).filter(q => !q.answer);
-
   if (unanswered.length === 0) {
     container.innerHTML = "<p class='empty-msg'>No unanswered questions.</p>";
     return;
   }
-
   container.innerHTML = "";
   unanswered.forEach(q => {
     const el = document.createElement("div");
@@ -244,24 +240,16 @@ function renderHiderQuestions(game) {
       <div class="hq-buttons">
         <button class="hq-btn yes" onclick="answerQuestion('${q.id}', 'Yes')">Yes</button>
         <button class="hq-btn no"  onclick="answerQuestion('${q.id}', 'No')">No</button>
-      </div>
-    `;
+      </div>`;
     container.appendChild(el);
   });
 }
 
 async function answerQuestion(questionId, answer) {
   const result = await apiPost("/game/answer_question", {
-    gameId: state.gameId,
-    hiderId: state.profile.id,
-    questionId,
-    answer
+    gameId: state.gameId, hiderId: state.profile.id, questionId, answer
   });
-  if (!result || result.error) {
-    alert("Failed to submit answer.");
-    return;
-  }
-  // Update locally immediately
+  if (!result || result.error) { alert("Failed to submit answer."); return; }
   if (state.gameData) {
     const q = state.gameData.questions.find(q => q.id === questionId);
     if (q) q.answer = answer;
@@ -272,12 +260,10 @@ async function answerQuestion(questionId, answer) {
 function renderHiderCards(game) {
   const container = document.getElementById("hiderCardList");
   const cards = (game.hiderCards || []).filter(c => !c.played);
-
   if (cards.length === 0) {
     container.innerHTML = "<p class='empty-msg'>No cards in hand.</p>";
     return;
   }
-
   container.innerHTML = "";
   cards.forEach(card => {
     const el = document.createElement("div");
@@ -288,27 +274,21 @@ function renderHiderCards(game) {
         <span class="card-name">${card.name}</span>
       </div>
       <p class="card-desc">${card.desc}</p>
-      <button class="card-play-btn" onclick="playCard('${card.id}')">Play Card</button>
-    `;
+      <button class="card-play-btn" onclick="playCard('${card.id}')">Play Card</button>`;
     container.appendChild(el);
   });
 }
 
 async function playCard(cardId) {
   const result = await apiPost("/game/play_card", {
-    gameId: state.gameId,
-    hiderId: state.profile.id,
-    cardId
+    gameId: state.gameId, hiderId: state.profile.id, cardId
   });
-  if (!result || result.error) {
-    alert("Failed to play card.");
-    return;
-  }
-  // Update locally
+  if (!result || result.error) { alert("Failed to play card."); return; }
   if (state.gameData) {
     const card = state.gameData.hiderCards.find(c => c.id === cardId);
     if (card) card.played = true;
     state.gameData.bonusTime = result.bonusTime;
+    if (result.activeChallenge) state.gameData.activeChallenge = result.activeChallenge;
     renderHiderSeekScreen(state.gameData);
   }
 }
@@ -335,18 +315,15 @@ async function pollState() {
   console.log("[POLL] status:", game.status, "hideStart:", game.hideStart, "hideTime:", game.hideTime);
   state.gameData = game;
 
-  // Start elapsed clock once we're in hide or seek phase
   if ((game.status === "hide" || game.status === "seek") && game.hideStart && !elapsedClockStarted) {
     elapsedClockStarted = true;
     startElapsedClock(game.hideStart);
   }
 
-  // Countdown timer sync during hide phase
   if (game.status === "hide" && game.hideStart && game.hideTime) {
     startLocalTimer(game.hideStart, game.hideTime);
   }
 
-  // Screen routing
   if (game.status === "lobby") {
     if (game.hostId === state.profile.id) {
       showScreen("hostScreen");
@@ -370,6 +347,7 @@ async function pollState() {
       showScreen("seekMapScreen");
       updateSeekerMarkers(game);
       renderQuestionLog(game);
+      updateChallengeOverlay(game); // show/hide challenge blocking screen
     }
   }
 }
@@ -381,9 +359,7 @@ setInterval(pollState, 5000);
 navigator.geolocation.watchPosition(pos => {
   if (!state.gameId || !state.profile) return;
   apiPost("/position/update", {
-    gameId: state.gameId,
-    playerId: state.profile.id,
-    lat: pos.coords.latitude,
-    lng: pos.coords.longitude
+    gameId: state.gameId, playerId: state.profile.id,
+    lat: pos.coords.latitude, lng: pos.coords.longitude
   });
 });
