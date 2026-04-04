@@ -471,6 +471,9 @@ async function pollState() {
 
 setInterval(pollState, 5000);
 
+setInterval(checkServerStatus, 3000);
+checkServerStatus();
+
 // ---------- GPS ----------
 
 navigator.geolocation.watchPosition(pos => {
@@ -480,3 +483,23 @@ navigator.geolocation.watchPosition(pos => {
     lat: pos.coords.latitude, lng: pos.coords.longitude
   });
 });
+
+async function checkServerStatus() {
+  try {
+    const res = await fetch(baseUrl + "/", {
+      headers: {
+        "ngrok-skip-browser-warning": "123",
+        "User-Agent": "Mozilla/5.0"
+      }
+    });
+
+    if (res.ok) {
+      document.getElementById("serverStatus").textContent = "Server: 🟢 Online";
+    } else {
+      document.getElementById("serverStatus").textContent = "Server: 🟡 Error";
+    }
+
+  } catch (e) {
+    document.getElementById("serverStatus").textContent = "Server: 🔴 Offline";
+  }
+}
