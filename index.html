@@ -7,34 +7,39 @@
 </head>
 <body>
 
-<div id="menu">
-  <div id="homeScreen">
-    <input id="nameInput" placeholder="Enter name">
-    <input id="gameIdInput" placeholder="Game ID">
-    <button onclick="createProfile()">Create Profile</button>
-    <button onclick="createGameFromInput()">Create Game</button>
-    <button onclick="joinGame()">Join Game</button>
-  </div>
+<div id="menu" style="position: absolute; bottom: 10px; left: 10px;">
+  <input id="nameInput" placeholder="Enter name">
+  <button onclick="createProfile()">Create Profile</button>
 
-  <div id="waitingScreen" style="display:none">
-    Waiting for the host to start the game...
-  </div>
+  <input id="gameIdInput" placeholder="Game ID">
+  <button onclick="createGameFromInput()">Create Game</button>
+  <button onclick="joinGame()">Join Game</button>
+</div>
 
-  <div id="hiderScreen" style="display:none">
-    <h3>You are the Hider!</h3>
-    <div id="hiderCards"></div>
-  </div>
+<!-- Screens -->
+<div id="homeScreen"></div>
 
-  <div id="seekerScreen" style="display:none">
-    <h3>You are a Seeker!</h3>
-    <div id="questionMenu"></div>
-  </div>
+<div id="waitingScreen" style="text-align:center;">
+  <h2>Waiting for host...</h2>
+</div>
 
-  <div id="hostScreen" style="display:none">
-    <h3>You are the Host</h3>
-    <p>Select a hider:</p>
-    <div id="hostPlayerList"></div>
+<div id="hostScreen" style="text-align:center;">
+  <h2>Lobby: Select Hider</h2>
+  <div>
+    Hide Time (seconds): <input id="hideTimeInput" type="number" value="30" min="1">
   </div>
+  <div id="hostPlayerList"></div>
+  <button id="startGameBtn" style="display:none;" onclick="startGameRound()">Start Game</button>
+</div>
+
+<div id="hiderScreen">
+  <h2>You are the Hider!</h2>
+  <div>Hide time remaining: <span id="hideTimerHider">0</span>s</div>
+</div>
+
+<div id="seekerScreen">
+  <h2>You are a Seeker</h2>
+  <div>Hide time remaining: <span id="hideTimerSeeker">0</span>s</div>
 </div>
 
 <div id="map"></div>

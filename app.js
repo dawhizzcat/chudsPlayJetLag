@@ -78,51 +78,70 @@ function showScreen(screenId) {
   });
 }
 
-// Poll game state every second
-async function pollGameState() {
-  if (!gameId || !profileId) return;
 
-  const state = await apiGet(`/state/${gameId}`);
+// Select hider
+let selectedHiderId = null;
 
-  // Role-based screens
-  if (state.status === "lobby") {
-    if (state.hostId === profileId) {
-      showScreen("hostScreen");
-      renderHostPlayerList(state);
-    } else {
-      showScreen("waitingScreen");
-    }
-  } else if (state.status === "started") {
-    if (state.hiderId === profileId) {
-      showScreen("hiderScreen");
-    } else {
-      showScreen("seekerScreen");
-    }
-  }
-}
-
-// Host selects a hider
 async function selectHider(hiderId) {
-  await apiPost("/game/select_hider", {
-    gameId,
-    hostId: profileId,
-    hiderId
-  });
+  selectedHiderId = hiderId;
+  renderHostPlayerList(state.gameData); // refresh buttons
+  document.getElementById("startGameBtn").style.display = "inline-block";
 }
 
-// Render host's player list to pick a hider
-function renderHostPlayerList(state) {
+// Start game
+async function startGameRound() {
+  const hideTime = parseInt(document.getElementById("hideTimeInput").value);
+  await apiPost("/game/start", { gameId, hostId: profileId });
+
+  // Update hideStart in local state for timer
+  state.gameData.status = "hide";
+  state.gameData.hideStart = Date.now() / 1000; // timestamp
+  state.gameData.hideTime = hideTime;
+}
+
+// Render host player list
+function renderHostPlayerList(game) {
   const container = document.getElementById("hostPlayerList");
   container.innerHTML = "";
-  state.players.forEach(p => {
+  game.players.forEach(p => {
     if (p.id !== profileId) {
       const btn = document.createElement("button");
-      btn.textContent = p.name;
+      btn.textContent = `${p.name}${selectedHiderId === p.id ? " ✅" : ""}`;
       btn.onclick = () => selectHider(p.id);
       container.appendChild(btn);
     }
   });
 }
 
-// Start polling
-setInterval(pollGameState, 1000);
+// Poll game state
+async function pollGameState() {
+  if (!gameId || !profileId) return;
+
+  const game = await apiGet(`/state/${gameId}`);
+  state.gameData = game;
+
+  let hideRemaining = 0;
+  if (game.status === "hide" && game.hideStart && game.hideTime) {
+    const elapsed = Math.floor(Date.now() / 1000 - game.hideStart);
+    hideRemaining = Math.max(0, game.hideTime - elapsed);
+  }
+
+  document.getElementById("hideTimerHider").textContent = hideRemaining;
+  document.getElementById("hideTimerSeeker").textContent = hideRemaining;
+
+  // Role-based screens
+  if (game.status === "lobby") {
+    if (game.hostId === profileId) {
+      showScreen("hostScreen");
+      renderHostPlayerList(game);
+    } else {
+      showScreen("waitingScreen");
+    }
+  } else if (game.status === "hide") {
+    if (game.hiderId === profileId) {
+      showScreen("hiderScreen");
+    } else {
+      showScreen("seekerScreen");
+    }
+  }
+}
