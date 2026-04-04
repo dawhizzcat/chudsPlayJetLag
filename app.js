@@ -97,10 +97,19 @@ async function joinGame() {
     return;
   }
 
-  // Mid-round rejoin: route to correct screen immediately
+  // Mid-round rejoin: route to correct screen and restore timers
   if (game.status === "hide" || game.status === "seek") {
     state.gameData = game;
     hideSplash();
+    // Restore elapsed clock
+    if (game.hideStart && !elapsedClockStarted) {
+      elapsedClockStarted = true;
+      startElapsedClock(game.hideStart);
+    }
+    // Restore countdown timer if still in hide phase
+    if (game.status === "hide" && game.hideStart && game.hideTime) {
+      startLocalTimer(game.hideStart, game.hideTime);
+    }
     routeToScreen(game);
     startPollingFast();
     return;
@@ -137,6 +146,10 @@ function showScreen(screenId) {
 function routeToScreen(game) {
   if (game.status === "lobby") {
     if (game.hostId === state.profile.id) {
+      // Reset hider selection when returning to lobby
+      selectedHiderId = null;
+      const startBtn = document.getElementById("startGameBtn");
+      if (startBtn) startBtn.style.display = "none";
       showScreen("hostScreen");
       renderHostPlayerList(game);
     } else {
@@ -179,6 +192,9 @@ async function selectHider(hiderId) {
 }
 
 async function startGameRound() {
+  const startBtn = document.getElementById("startGameBtn");
+  if (startBtn) { startBtn.disabled = true; startBtn.textContent = "Starting..."; }
+
   const hideTime = parseInt(document.getElementById("hideTimeInput").value) * 60;
   const playAreaMiles = parseFloat(document.getElementById("playAreaInput").value) || null;
 
@@ -474,6 +490,30 @@ function updateSeekerMarkers(game) {
   updateMarkers(seekerPositions, game.players);
 }
 
+// ---------- Close Room ----------
+
+async function closeRoom() {
+  if (!confirm("Close this room? All game data will be deleted.")) return;
+  const result = await apiPost("/game/close", {
+    gameId: state.gameId, hostId: state.profile.id
+  });
+  if (!result || result.error) {
+    alert("Failed to close room: " + (result?.error || "Unknown error"));
+    return;
+  }
+  // Reset local state and return to splash
+  state.gameId = null;
+  state.gameData = null;
+  selectedHiderId = null;
+  stopPollingFast();
+  if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  elapsedClockStarted = false;
+  localHideEnd = null;
+  document.getElementById("splashScreen").style.display = "";
+  showScreen("__none__");
+}
+
 // ---------- Polling ----------
 
 let elapsedClockStarted = false;
@@ -490,8 +530,29 @@ function stopPollingFast() {
 
 async function pollState() {
   if (!state.gameId || !state.profile) return;
-  const game = await apiGet(`/state/${state.gameId}`);
-  if (!game || game.error) return;
+  let game;
+  try {
+    game = await apiGet(`/state/${state.gameId}`);
+  } catch (e) {
+    console.warn("[Poll] Network error:", e);
+    return;
+  }
+  if (!game) return;
+  if (game.error) {
+    // Game was deleted (room closed by host) — return to splash
+    if (game.error === "Game not found") {
+      state.gameId = null;
+      state.gameData = null;
+      stopPollingFast();
+      if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      elapsedClockStarted = false;
+      localHideEnd = null;
+      document.getElementById("splashScreen").style.display = "";
+      showScreen("__none__");
+    }
+    return;
+  }
   state.gameData = game;
 
   if ((game.status === "hide" || game.status === "seek") && game.hideStart && !elapsedClockStarted) {

@@ -169,6 +169,7 @@ input::placeholder { color: var(--muted); }
 .btn-secondary { background: var(--surface3); color: var(--text); border: 1px solid var(--border); }
 .btn-outline  { background: transparent; color: var(--accent); border: 2px solid var(--accent); }
 .btn-start    { background: var(--green); color: #fff; margin-top: 12px; }
+.btn-danger   { background: #7f1d1d; color: #fca5a5; margin-top: 8px; border: 1px solid #ef4444; }
 
 .btn-row {
   display: grid;
