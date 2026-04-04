@@ -36,7 +36,7 @@ html, body {
 #map {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: 1;
 }
 
 /* ============================================================
@@ -685,14 +685,16 @@ input::placeholder { color: var(--muted); }
 
 #serverStatus {
   position: fixed;
-  bottom: 10px;
-  left: 10px;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  left: max(10px, env(safe-area-inset-left));
   font-size: 12px;
   padding: 6px 10px;
   background: rgba(0, 0, 0, 0.6);
   color: white;
   border-radius: 6px;
-  z-index: 9999;
+  z-index: 999999; /* 🔥 increase this */
   pointer-events: none;
   font-family: sans-serif;
+   margin: 0;
+   overflow: hidden;
 }
