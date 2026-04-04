@@ -1,5 +1,84 @@
 initMap();
 
+// ---------- Session Persistence ----------
+// Save profile + gameId to localStorage so page refresh / phone kill doesn't lose the session
+
+function saveSession() {
+  try {
+    localStorage.setItem("jl_profile", JSON.stringify(state.profile));
+    localStorage.setItem("jl_gameId", state.gameId || "");
+  } catch(e) {}
+}
+
+function clearSession() {
+  try {
+    localStorage.removeItem("jl_profile");
+    localStorage.removeItem("jl_gameId");
+  } catch(e) {}
+}
+
+function loadSession() {
+  try {
+    const p = localStorage.getItem("jl_profile");
+    const g = localStorage.getItem("jl_gameId");
+    if (p) state.profile = JSON.parse(p);
+    if (g) state.gameId = g || null;
+  } catch(e) {}
+}
+
+// On page load: restore session and silently rejoin if we have a gameId
+async function tryResumeSession() {
+  loadSession();
+  if (!state.profile || !state.gameId) {
+    document.getElementById("splashScreen").style.display = "";
+    return false;
+  }
+
+  console.log("[Session] Attempting silent rejoin:", state.gameId);
+
+  let game;
+  try {
+    // Re-join to make sure we're in the player list (idempotent on backend)
+    game = await apiPost("/game/join", {
+      gameId: state.gameId,
+      player: { id: state.profile.id, name: state.profile.name }
+    });
+  } catch(e) {
+    console.warn("[Session] Rejoin network error:", e);
+    document.getElementById("splashScreen").style.display = "";
+    return false;
+  }
+
+  if (!game || game.error) {
+    // Game is gone — clear stale session silently
+    console.log("[Session] Game not found, clearing session");
+    clearSession();
+    state.gameId = null;
+    document.getElementById("splashScreen").style.display = "";
+    return false;
+  }
+
+  console.log("[Session] Rejoined successfully, status:", game.status);
+  state.gameData = game;
+
+  hideSplash();
+
+  // Restore timers if mid-round
+  if ((game.status === "hide" || game.status === "seek") && game.hideStart) {
+    if (!elapsedClockStarted) {
+      elapsedClockStarted = true;
+      startElapsedClock(game.hideStart);
+    }
+    if (game.status === "hide" && game.hideTime) {
+      startLocalTimer(game.hideStart, game.hideTime);
+    }
+    startPollingFast();
+  }
+
+  routeToScreen(game);
+  return true;
+}
+
 // ---------- Timer ----------
 
 let timerInterval = null;
@@ -21,7 +100,6 @@ function startLocalTimer(hideStart, hideTime) {
     if (remaining === 0) {
       clearInterval(timerInterval);
       timerInterval = null;
-      // Immediately show seek screen locally — don't wait for poll
       if (state.gameData) {
         state.gameData.status = "seek";
         routeToScreen(state.gameData);
@@ -59,6 +137,7 @@ async function createProfile() {
     return;
   }
   state.profile = profile;
+  saveSession(); // persist immediately
   alert(`Profile created! Welcome, ${profile.name}`);
 }
 
@@ -73,11 +152,11 @@ async function createGameFromInput() {
     state.gameId = null;
     return;
   }
-  // Host joins as a player too
   await apiPost("/game/join", {
     gameId: state.gameId,
     player: { id: state.profile.id, name: state.profile.name }
   });
+  saveSession();
   hideSplash();
   showScreen("hostScreen");
 }
@@ -97,16 +176,15 @@ async function joinGame() {
     return;
   }
 
-  // Mid-round rejoin: route to correct screen and restore timers
+  saveSession();
+
   if (game.status === "hide" || game.status === "seek") {
     state.gameData = game;
     hideSplash();
-    // Restore elapsed clock
     if (game.hideStart && !elapsedClockStarted) {
       elapsedClockStarted = true;
       startElapsedClock(game.hideStart);
     }
-    // Restore countdown timer if still in hide phase
     if (game.status === "hide" && game.hideStart && game.hideTime) {
       startLocalTimer(game.hideStart, game.hideTime);
     }
@@ -142,11 +220,9 @@ function showScreen(screenId) {
   }
 }
 
-// Route a player to the right screen based on game state
 function routeToScreen(game) {
   if (game.status === "lobby") {
     if (game.hostId === state.profile.id) {
-      // Reset hider selection when returning to lobby
       selectedHiderId = null;
       const startBtn = document.getElementById("startGameBtn");
       if (startBtn) startBtn.style.display = "none";
@@ -203,11 +279,9 @@ async function startGameRound() {
     hostId: state.profile.id, hideTime, playAreaMiles
   });
 
-  // Optimistically show the right screen immediately
   const isHider = selectedHiderId === state.profile.id;
   showScreen(isHider ? "hiderScreen" : "seekerScreen");
 
-  // Start a local best-guess timer while GPS + start call run in background
   const estimatedStart = Date.now() / 1000;
   startLocalTimer(estimatedStart, hideTime);
   startPollingFast();
@@ -231,7 +305,6 @@ async function startGameRound() {
     alert("Failed to start: " + (game?.error || "Unknown error"));
     return;
   }
-  // Re-sync timer to actual server hideStart
   startLocalTimer(game.game.hideStart, hideTime);
 }
 
@@ -296,11 +369,9 @@ const QUESTIONS = [
 
 function toggleQuestionMenu() {
   const panel = document.getElementById("questionPanel");
-  panel.style.display = panel.style.display === "none" ? "flex" : "none";
-  // flex so the column layout works
-  if (panel.style.display === "flex") {
-    panel.style.flexDirection = "column";
-  }
+  const isOpen = panel.style.display === "flex";
+  panel.style.display = isOpen ? "none" : "flex";
+  if (!isOpen) panel.style.flexDirection = "column";
 }
 
 async function askQuestion(question) {
@@ -388,6 +459,7 @@ async function foundHider() {
 
   if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
   elapsedClockStarted = false;
+  localHideEnd = null;
 
   state.gameData = result.game;
   routeToScreen(result.game);
@@ -501,10 +573,14 @@ async function closeRoom() {
     alert("Failed to close room: " + (result?.error || "Unknown error"));
     return;
   }
-  // Reset local state and return to splash
+  resetToSplash();
+}
+
+function resetToSplash() {
   state.gameId = null;
   state.gameData = null;
   selectedHiderId = null;
+  clearSession();           // wipe localStorage so we don't re-rejoin a dead game
   stopPollingFast();
   if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
@@ -519,7 +595,6 @@ async function closeRoom() {
 let elapsedClockStarted = false;
 let fastPollInterval = null;
 
-// Switch to fast polling (1s) during active game phases, restore to 5s in lobby
 function startPollingFast() {
   if (fastPollInterval) return;
   fastPollInterval = setInterval(pollState, 1000);
@@ -535,21 +610,13 @@ async function pollState() {
     game = await apiGet(`/state/${state.gameId}`);
   } catch (e) {
     console.warn("[Poll] Network error:", e);
-    return;
+    return; // silent — just try again next interval
   }
   if (!game) return;
   if (game.error) {
-    // Game was deleted (room closed by host) — return to splash
     if (game.error === "Game not found") {
-      state.gameId = null;
-      state.gameData = null;
-      stopPollingFast();
-      if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
-      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-      elapsedClockStarted = false;
-      localHideEnd = null;
-      document.getElementById("splashScreen").style.display = "";
-      showScreen("__none__");
+      // Room was closed by host — go back to splash and clear session
+      resetToSplash();
     }
     return;
   }
@@ -577,7 +644,6 @@ async function pollState() {
 
 setInterval(pollState, 5000);
 
-
 // ---------- GPS ----------
 
 navigator.geolocation.watchPosition(pos => {
@@ -588,16 +654,12 @@ navigator.geolocation.watchPosition(pos => {
   });
 });
 
+// ---------- Server Status ----------
+
 async function checkServerStatus() {
   const el = document.getElementById("serverStatus");
-
   try {
-    await fetch(baseUrl + "/", {
-      headers: {
-        "ngrok-skip-browser-warning": "123"
-      }
-    });
-
+    await fetch(baseUrl + "/", { headers: { "ngrok-skip-browser-warning": "123" } });
     el.textContent = "Server: Online";
     el.style.background = "rgba(0, 150, 0, 0.7)";
   } catch (e) {
@@ -605,7 +667,9 @@ async function checkServerStatus() {
     el.style.background = "rgba(150, 0, 0, 0.7)";
   }
 }
-
-// check every 3 seconds
 setInterval(checkServerStatus, 3000);
 checkServerStatus();
+
+// ---------- Boot ----------
+// Try to resume a saved session; if not, show splash normally
+tryResumeSession();
