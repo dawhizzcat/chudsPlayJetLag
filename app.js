@@ -13,8 +13,11 @@ function startLocalTimer(hideStart, hideTime) {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(() => {
     const remaining = Math.max(0, Math.floor((localHideEnd - Date.now()) / 1000));
-    document.getElementById("hideTimerHider").textContent = remaining;
-    document.getElementById("hideTimerSeeker").textContent = remaining;
+    const rMins = Math.floor(remaining / 60);
+    const rSecs = String(remaining % 60).padStart(2, "0");
+    const rStr = `${rMins}:${rSecs}`;
+    document.getElementById("hideTimerHider").textContent = rStr;
+    document.getElementById("hideTimerSeeker").textContent = rStr;
     if (remaining === 0) {
       clearInterval(timerInterval);
       pollState();
@@ -165,7 +168,7 @@ async function selectHider(hiderId) {
 }
 
 async function startGameRound() {
-  const hideTime = parseInt(document.getElementById("hideTimeInput").value);
+  const hideTime = parseInt(document.getElementById("hideTimeInput").value) * 60;
   const playAreaMiles = parseFloat(document.getElementById("playAreaInput").value) || null;
 
   await apiPost("/game/select_hider", {
@@ -222,11 +225,13 @@ function renderScores(game) {
     el.className = "score-entry";
     const mins = Math.floor(s.totalTime / 60);
     const secs = String(s.totalTime % 60).padStart(2, "0");
-    const bonus = s.bonusTime > 0 ? ` <span class="score-bonus">(+${s.bonusTime}s bonus)</span>` : "";
+    const bonusMins = Math.floor(s.bonusTime / 60);
+    const bonusSecs = String(s.bonusTime % 60).padStart(2, "0");
+    const bonusStr = s.bonusTime > 0 ? ` <span class="score-bonus">(+${bonusMins}:${bonusSecs} bonus)</span>` : "";
     el.innerHTML = `
       <span class="score-rank">#${i + 1}</span>
       <span class="score-name">${s.hiderName}</span>
-      <span class="score-time">${mins}:${secs}${bonus}</span>`;
+      <span class="score-time">${mins}:${secs}${bonusStr}</span>`;
     container.appendChild(el);
   });
 }
@@ -340,7 +345,9 @@ async function foundHider() {
   const s = result.score;
   const mins = Math.floor(s.totalTime / 60);
   const secs = String(s.totalTime % 60).padStart(2, "0");
-  alert(`${s.hiderName} was hidden for ${mins}:${secs} (${s.elapsed}s + ${s.bonusTime}s bonus)!`);
+  const bonusMins = Math.floor(s.bonusTime / 60);
+  const bonusSecs = String(s.bonusTime % 60).padStart(2, "0");
+  alert(`${s.hiderName} was hidden for ${mins}:${secs} (+${bonusMins}:${bonusSecs} bonus)!`);
 
   if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
   elapsedClockStarted = false;
@@ -359,7 +366,9 @@ function renderHiderSeekScreen(game) {
   const bonusSec = document.getElementById("bonusSeconds");
   if (bonus > 0) {
     badge.style.display = "inline-flex";
-    bonusSec.textContent = bonus;
+    const bMins = Math.floor(bonus / 60);
+    const bSecs = String(bonus % 60).padStart(2, "0");
+    bonusSec.textContent = `${bMins}:${bSecs}`;
   } else {
     badge.style.display = "none";
   }
