@@ -213,16 +213,24 @@ function showScreen(screenId) {
   ];
   screens.forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.style.display = (id === screenId ? "" : "none");
+    if (!el) return;
+    if (id === screenId) {
+      el.style.display = (id === "hiderSeekScreen") ? "flex" : "";
+    } else {
+      el.style.display = "none";
+    }
   });
   if (screenId === "seekMapScreen") {
     setTimeout(() => map.invalidateSize(), 100);
   }
   if (screenId === "hiderSeekScreen") {
-    setTimeout(() => {
-      initHiderMap();
-      if (state.gameData) updateHiderMap(state.gameData);
-    }, 200);
+    // Use rAF + timeout so the flex layout has fully painted before Leaflet measures
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        initHiderMap();
+        if (state.gameData) updateHiderMap(state.gameData);
+      }, 150);
+    });
   }
 }
 
@@ -577,6 +585,13 @@ function updateSeekerMarkers(game) {
     if (id !== game.hiderId) seekerPositions[id] = pos;
   }
   updateMarkers(seekerPositions, game.players);
+}
+
+// ---------- Leave Game ----------
+
+async function leaveGame() {
+  if (!confirm("Leave this game? You can rejoin with the same game ID.")) return;
+  resetToSplash();
 }
 
 // ---------- Close Room ----------
