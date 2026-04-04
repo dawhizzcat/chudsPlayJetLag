@@ -4,12 +4,86 @@ let overlayLayers = [];
 let playAreaLayer = null;
 let playAreaFitted = false;
 
+// --- Second map for hider seek screen ---
+let hiderMap = null;
+let hiderMarkers = {};
+let hiderOverlayLayers = [];
+let hiderPlayAreaLayer = null;
+let hiderMapFitted = false;
+
 function initMap() {
   map = L.map('map').setView([42.37, -72.52], 13);
-
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap'
   }).addTo(map);
+}
+
+function initHiderMap() {
+  if (hiderMap) return;
+  hiderMap = L.map('hiderMapDiv').setView([42.37, -72.52], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(hiderMap);
+}
+
+function updateHiderMap(game) {
+  if (!hiderMap) return;
+
+  // All players, labeled by name
+  const nameMap = {};
+  (game.players || []).forEach(p => nameMap[p.id] = p.name);
+  const positions = game.positions || {};
+
+  // Remove stale markers
+  for (const id in hiderMarkers) {
+    if (!positions[id]) { hiderMarkers[id].remove(); delete hiderMarkers[id]; }
+  }
+
+  for (const id in positions) {
+    const pos = positions[id];
+    if (!pos.lat || !pos.lng) continue;
+    const label = nameMap[id] || id.slice(0, 6);
+    const isHider = id === game.hiderId;
+    const dotClass = isHider ? "marker-dot marker-dot-hider" : "marker-dot";
+    const html = `<div class="player-marker"><div class="${dotClass}"></div><div class="marker-label">${label}</div></div>`;
+
+    if (!hiderMarkers[id]) {
+      const icon = L.divIcon({ className: '', html, iconAnchor: [20, 20] });
+      hiderMarkers[id] = L.marker([pos.lat, pos.lng], { icon }).addTo(hiderMap);
+    } else {
+      hiderMarkers[id].setLatLng([pos.lat, pos.lng]);
+    }
+  }
+
+  // Overlays (reuse existing geometry builders)
+  hiderOverlayLayers.forEach(l => hiderMap.removeLayer(l));
+  hiderOverlayLayers = [];
+  const bounds = (game.playAreaCenter && game.playAreaMiles)
+    ? getPlayAreaBounds(game.playAreaCenter, game.playAreaMiles) : null;
+  const BIG = bounds ? null : 10;
+  (game.overlays || []).forEach(overlay => {
+    let layer = null;
+    if (overlay.type === "radius") layer = buildRadiusOverlay(overlay, bounds, BIG);
+    else if (overlay.type === "half") layer = buildHalfPlaneOverlay(overlay, bounds, BIG);
+    if (layer) { layer.addTo(hiderMap); hiderOverlayLayers.push(layer); }
+  });
+
+  // Play area boundary
+  if (!game.playAreaCenter || !game.playAreaMiles) {
+    if (hiderPlayAreaLayer) { hiderMap.removeLayer(hiderPlayAreaLayer); hiderPlayAreaLayer = null; }
+    hiderMapFitted = false;
+  } else {
+    const pb = getPlayAreaBounds(game.playAreaCenter, game.playAreaMiles);
+    if (!hiderPlayAreaLayer) {
+      hiderPlayAreaLayer = L.rectangle(pb, {
+        color: "#facc15", weight: 2, fill: false, dashArray: "6 4"
+      }).addTo(hiderMap);
+    }
+    if (!hiderMapFitted) {
+      hiderMap.fitBounds(pb, { padding: [20, 20] });
+      hiderMapFitted = true;
+    }
+  }
 }
 
 // players is optional array of {id, name} for labeling

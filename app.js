@@ -218,6 +218,12 @@ function showScreen(screenId) {
   if (screenId === "seekMapScreen") {
     setTimeout(() => map.invalidateSize(), 100);
   }
+  if (screenId === "hiderSeekScreen") {
+    setTimeout(() => {
+      initHiderMap();
+      hiderMap.invalidateSize();
+    }, 100);
+  }
 }
 
 let lastRoutedStatus = null;
@@ -480,6 +486,7 @@ async function foundHider() {
 function renderHiderSeekScreen(game) {
   renderHiderQuestions(game);
   renderHiderCards(game);
+  updateHiderMap(game);
   const bonus = game.bonusTime || 0;
   const badge = document.getElementById("bonusBadge");
   const bonusSec = document.getElementById("bonusSeconds");
