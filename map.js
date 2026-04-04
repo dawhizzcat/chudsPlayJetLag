@@ -2,6 +2,7 @@ let map;
 let markers = {};
 let overlayLayers = [];
 let playAreaLayer = null;
+let playAreaFitted = false;
 
 function initMap() {
   map = L.map('map').setView([42.37, -72.52], 13);
@@ -42,21 +43,30 @@ function updateMarkers(positions, players) {
 
 // Draw or update the play area boundary square
 function updatePlayArea(center, miles) {
-  if (playAreaLayer) {
-    map.removeLayer(playAreaLayer);
-    playAreaLayer = null;
+  if (!center || !miles) {
+    // Round ended — clear layer and reset so next round fits again
+    if (playAreaLayer) { map.removeLayer(playAreaLayer); playAreaLayer = null; }
+    playAreaFitted = false;
+    return;
   }
-  if (!center || !miles) return;
 
   const bounds = getPlayAreaBounds(center, miles);
-  playAreaLayer = L.rectangle(bounds, {
-    color: "#facc15",
-    weight: 2,
-    fill: false,
-    dashArray: "6 4"
-  }).addTo(map);
 
-  map.fitBounds(bounds, { padding: [20, 20] });
+  // Only draw the rectangle if it doesn't exist yet
+  if (!playAreaLayer) {
+    playAreaLayer = L.rectangle(bounds, {
+      color: "#facc15",
+      weight: 2,
+      fill: false,
+      dashArray: "6 4"
+    }).addTo(map);
+  }
+
+  // Only zoom to fit once per round
+  if (!playAreaFitted) {
+    map.fitBounds(bounds, { padding: [20, 20] });
+    playAreaFitted = true;
+  }
 }
 
 // Returns Leaflet LatLngBounds for a square centered at center with side = miles
