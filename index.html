@@ -10,14 +10,12 @@
 <div id="menu">
   <input id="nameInput" placeholder="Enter name">
   <button onclick="createProfile()">Create Profile</button>
-
   <input id="gameIdInput" placeholder="Game ID">
   <button onclick="createGameFromInput()">Create Game</button>
   <button onclick="joinGame()">Join Game</button>
 </div>
 
-<!-- Screens -->
-<!-- Home screen covers the map until the player joins/creates a game -->
+<!-- Home screen covers the map until in-game -->
 <div id="homeScreen" style="display:block;">
   <div class="home-title">
     <h1>🛰️ Jet Lag IRL</h1>
@@ -43,6 +41,7 @@
   </div>
 </div>
 
+<!-- Hider: counting down while hiding -->
 <div id="hiderScreen" style="display:none;">
   <div class="screen-card">
     <h2>You are the Hider!</h2>
@@ -53,6 +52,7 @@
   </div>
 </div>
 
+<!-- Seeker: waiting for hide phase to end -->
 <div id="seekerScreen" style="display:none;">
   <div class="screen-card">
     <h2>You are a Seeker</h2>
@@ -63,8 +63,40 @@
   </div>
 </div>
 
-<!-- Seek phase: full map with overlaid UI -->
+<!-- Hider seek screen: shown after hide timer ends, hider sees questions + cards -->
+<div id="hiderSeekScreen" style="display:none;">
+
+  <!-- Elapsed clock top-left -->
+  <div class="elapsed-badge">
+    <span class="elapsed-icon">⏱</span>
+    <span id="elapsedHider">0:00</span>
+    <span class="elapsed-label">hidden</span>
+    <span id="bonusBadge" style="display:none;" class="bonus-badge">+<span id="bonusSeconds">0</span>s bonus</span>
+  </div>
+
+  <!-- Unanswered questions -->
+  <div id="hiderQuestions" class="hider-panel hider-questions-panel">
+    <h3>❓ Incoming Questions</h3>
+    <div id="hiderQuestionList"><p class="empty-msg">No questions yet...</p></div>
+  </div>
+
+  <!-- Card hand -->
+  <div id="hiderCards" class="hider-panel hider-cards-panel">
+    <h3>🃏 Your Cards</h3>
+    <div id="hiderCardList"><p class="empty-msg">Cards are dealt when seekers ask questions.</p></div>
+  </div>
+
+</div>
+
+<!-- Seek phase: full map with overlaid UI for seekers -->
 <div id="seekMapScreen" style="display:none;">
+
+  <!-- Elapsed clock top-left -->
+  <div class="elapsed-badge">
+    <span class="elapsed-icon">⏱</span>
+    <span id="elapsedSeeker">0:00</span>
+    <span class="elapsed-label">hider hidden</span>
+  </div>
 
   <!-- Question button -->
   <button class="question-btn" onclick="toggleQuestionMenu()">❓ Ask Question</button>
@@ -72,9 +104,7 @@
   <!-- Question panel -->
   <div id="questionPanel" style="display:none;" class="question-panel">
     <h3>Ask the Hider</h3>
-    <div id="questionList">
-      <!-- Populated by JS -->
-    </div>
+    <div id="questionList"></div>
     <hr>
     <h4>Previous Questions</h4>
     <div id="questionLog"></div>
@@ -82,7 +112,7 @@
 
 </div>
 
-<!-- Map always in DOM so Leaflet stays initialized -->
+<!-- Map always in DOM -->
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -92,7 +122,6 @@
 <script src="app.js"></script>
 
 <script>
-  // Populate question buttons from QUESTIONS array after scripts load
   window.addEventListener("load", () => {
     const list = document.getElementById("questionList");
     QUESTIONS.forEach(q => {
