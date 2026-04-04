@@ -10,10 +10,16 @@ function initMap() {
 }
 
 function updateMarkers(positions) {
+  console.log("UPDATING MARKERS:", positions);
+
   for (let id in positions) {
     const pos = positions[id];
 
+    console.log("Marker data:", id, pos);
+
     if (!markers[id]) {
+      console.log("Creating marker");
+
       markers[id] = L.marker([pos.lat, pos.lng]).addTo(map);
     } else {
       markers[id].setLatLng([pos.lat, pos.lng]);
