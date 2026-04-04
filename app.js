@@ -1,27 +1,28 @@
 initMap();
 
 async function createProfile() {
-  const name = document.getElementById("nameInput").value;
+  const name = document.getElementById("nameInput").value.trim() || "Player";
   const profile = await apiPost("/profile/create", { name });
-
-  state.profile = profile;
-  localStorage.setItem("profile", JSON.stringify(profile));
+  profileId = profile.id;  // <-- store this
+  alert(`Profile created! Your ID: ${profileId}`);
 }
 
 async function createGameFromInput() {
-  const gameId = document.getElementById("gameIdInput").value.trim();
-  if (!gameId) {
-    alert("Please enter a game ID!");
-    return;
-  }
+  const inputGameId = document.getElementById("gameIdInput").value.trim();
+  if (!inputGameId) return alert("Please enter a game ID.");
+  if (!profileId) return alert("Please create a profile first.");
+
+  gameId = inputGameId;
 
   try {
-    const game = await apiPost("/game/create", { gameId });
-    console.log("Game created:", game);
-    alert(`Game ${game.gameId} created!`);
+    const game = await apiPost("/game/create", {
+      gameId,
+      hostId: profileId
+    });
+    showScreen("hostScreen");
   } catch (e) {
-    console.error("Failed to create game:", e);
-    alert("Failed to create game, see console for details.");
+    console.error("Create game failed:", e);
+    alert("Failed to create game. Check console.");
   }
 }
 
