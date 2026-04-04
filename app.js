@@ -23,10 +23,10 @@ async function joinGame() {
 }
 
 async function pollState() {
-  console.log("GAME DATA:", game);
   if (!state.gameId) return;
 
   const game = await apiGet(`/state/${state.gameId}`);
+  console.log("GAME DATA:", game);
   state.gameData = game;
 
   updateMarkers(game.positions);
