@@ -9,9 +9,7 @@ async function createProfile() {
 }
 
 async function createGame(gameId) {
-  return await apiPost("/game/create", {
-    gameId: JSON.stringify({ gameId })
-  });
+  return await apiPost("/game/create", { gameId });
 }
 
 async function joinGame() {
