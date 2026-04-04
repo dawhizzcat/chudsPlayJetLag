@@ -682,3 +682,17 @@ input::placeholder { color: var(--muted); }
   white-space: nowrap;
   box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
+
+#serverStatus {
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  font-size: 12px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border-radius: 6px;
+  z-index: 9999;
+  pointer-events: none;
+  font-family: sans-serif;
+}

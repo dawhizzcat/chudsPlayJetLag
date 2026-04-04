@@ -471,8 +471,6 @@ async function pollState() {
 
 setInterval(pollState, 5000);
 
-setInterval(checkServerStatus, 3000);
-checkServerStatus();
 
 // ---------- GPS ----------
 
@@ -485,21 +483,23 @@ navigator.geolocation.watchPosition(pos => {
 });
 
 async function checkServerStatus() {
+  const el = document.getElementById("serverStatus");
+
   try {
-    const res = await fetch(baseUrl + "/", {
+    await fetch(baseUrl + "/", {
       headers: {
-        "ngrok-skip-browser-warning": "123",
-        "User-Agent": "Mozilla/5.0"
+        "ngrok-skip-browser-warning": "123"
       }
     });
 
-    if (res.ok) {
-      document.getElementById("serverStatus").textContent = "Server: 🟢 Online";
-    } else {
-      document.getElementById("serverStatus").textContent = "Server: 🟡 Error";
-    }
-
+    el.textContent = "Server: Online";
+    el.style.background = "rgba(0, 150, 0, 0.7)";
   } catch (e) {
-    document.getElementById("serverStatus").textContent = "Server: 🔴 Offline";
+    el.textContent = "Server: Offline";
+    el.style.background = "rgba(150, 0, 0, 0.7)";
   }
 }
+
+// check every 3 seconds
+setInterval(checkServerStatus, 3000);
+checkServerStatus();
