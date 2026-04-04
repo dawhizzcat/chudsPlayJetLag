@@ -8,6 +8,23 @@ async function createProfile() {
   localStorage.setItem("profile", JSON.stringify(profile));
 }
 
+async function createGameFromInput() {
+  const gameId = document.getElementById("gameIdInput").value.trim();
+  if (!gameId) {
+    alert("Please enter a game ID!");
+    return;
+  }
+
+  try {
+    const game = await apiPost("/game/create", { gameId });
+    console.log("Game created:", game);
+    alert(`Game ${game.gameId} created!`);
+  } catch (e) {
+    console.error("Failed to create game:", e);
+    alert("Failed to create game, see console for details.");
+  }
+}
+
 async function createGame(gameId) {
   return await apiPost("/game/create", { gameId });
 }
