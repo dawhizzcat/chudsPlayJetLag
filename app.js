@@ -9,7 +9,12 @@ async function joinGame() {
   const gameId = document.getElementById("gameIdInput").value.trim();
   if (!gameId) return alert("Enter a game ID!");
 
-  const game = await apiPost("/game/join", { gameId, player: state.profile });
+  console.log("Joining game:", { gameId, player: state.profile }); // DEBUG
+
+  const game = await apiPost("/game/join", {
+    gameId,
+    player: { id: state.profile.id, name: state.profile.name }
+  });
   state.gameId = gameId;
 }
 
@@ -49,9 +54,8 @@ let gameId = null;
 async function createProfile() {
   const name = document.getElementById("nameInput").value.trim() || "Player";
   const profile = await apiPost("/profile/create", { name });
-  profileId = profile.id;
-  state.profile = profile; // <-- store the whole profile object
-  alert(`Profile created! Your ID: ${profileId}`);
+  state.profile = profile; // store the full object
+  alert(`Profile created! Your ID: ${profile.id}`);
 }
 
 async function createGameFromInput() {
