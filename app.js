@@ -20,6 +20,16 @@ function startLocalTimer(hideStart, hideTime) {
     document.getElementById("hideTimerSeeker").textContent = rStr;
     if (remaining === 0) {
       clearInterval(timerInterval);
+      timerInterval = null;
+      // Immediately show seek screen locally — don't wait for poll
+      if (state.gameData) {
+        state.gameData.status = "seek";
+        routeToScreen(state.gameData);
+        if (!elapsedClockStarted && state.gameData.hideStart) {
+          elapsedClockStarted = true;
+          startElapsedClock(state.gameData.hideStart);
+        }
+      }
       pollState();
     }
   }, 1000);
@@ -92,6 +102,7 @@ async function joinGame() {
     state.gameData = game;
     hideSplash();
     routeToScreen(game);
+    startPollingFast();
     return;
   }
 
@@ -176,6 +187,15 @@ async function startGameRound() {
     hostId: state.profile.id, hideTime, playAreaMiles
   });
 
+  // Optimistically show the right screen immediately
+  const isHider = selectedHiderId === state.profile.id;
+  showScreen(isHider ? "hiderScreen" : "seekerScreen");
+
+  // Start a local best-guess timer while GPS + start call run in background
+  const estimatedStart = Date.now() / 1000;
+  startLocalTimer(estimatedStart, hideTime);
+  startPollingFast();
+
   let hostLat = null, hostLng = null;
   try {
     const pos = await new Promise((resolve, reject) => {
@@ -195,6 +215,7 @@ async function startGameRound() {
     alert("Failed to start: " + (game?.error || "Unknown error"));
     return;
   }
+  // Re-sync timer to actual server hideStart
   startLocalTimer(game.game.hideStart, hideTime);
 }
 
@@ -456,6 +477,16 @@ function updateSeekerMarkers(game) {
 // ---------- Polling ----------
 
 let elapsedClockStarted = false;
+let fastPollInterval = null;
+
+// Switch to fast polling (1s) during active game phases, restore to 5s in lobby
+function startPollingFast() {
+  if (fastPollInterval) return;
+  fastPollInterval = setInterval(pollState, 1000);
+}
+function stopPollingFast() {
+  if (fastPollInterval) { clearInterval(fastPollInterval); fastPollInterval = null; }
+}
 
 async function pollState() {
   if (!state.gameId || !state.profile) return;
@@ -469,10 +500,15 @@ async function pollState() {
   }
   if (game.status === "hide" && game.hideStart && game.hideTime) {
     startLocalTimer(game.hideStart, game.hideTime);
+    startPollingFast();
+  }
+  if (game.status === "seek") {
+    startPollingFast();
   }
   if (game.status === "lobby") {
     elapsedClockStarted = false;
     if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+    stopPollingFast();
   }
 
   routeToScreen(game);
