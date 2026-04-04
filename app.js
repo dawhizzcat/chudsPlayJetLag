@@ -17,7 +17,10 @@ function startLocalTimer(hideStart, hideTime) {
     const remaining = Math.max(0, Math.floor((localHideEnd - Date.now()) / 1000));
     document.getElementById("hideTimerHider").textContent = remaining;
     document.getElementById("hideTimerSeeker").textContent = remaining;
-    if (remaining === 0) clearInterval(timerInterval);
+    if (remaining === 0) {
+      clearInterval(timerInterval);
+      pollState(); // immediately sync with server on expiry
+    }
   }, 1000);
 }
 
