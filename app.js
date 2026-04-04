@@ -221,8 +221,8 @@ function showScreen(screenId) {
   if (screenId === "hiderSeekScreen") {
     setTimeout(() => {
       initHiderMap();
-      hiderMap.invalidateSize();
-    }, 100);
+      if (state.gameData) updateHiderMap(state.gameData);
+    }, 200);
   }
 }
 

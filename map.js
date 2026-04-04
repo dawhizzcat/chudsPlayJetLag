@@ -19,8 +19,16 @@ function initMap() {
 }
 
 function initHiderMap() {
-  if (hiderMap) return;
-  hiderMap = L.map('hiderMapDiv').setView([42.37, -72.52], 13);
+  // Destroy any previous instance so Leaflet can remeasure the now-visible div
+  if (hiderMap) {
+    hiderMap.remove();
+    hiderMap = null;
+    hiderMarkers = {};
+    hiderOverlayLayers = [];
+    hiderPlayAreaLayer = null;
+    hiderMapFitted = false;
+  }
+  hiderMap = L.map('hiderMapDiv', { zoomControl: true }).setView([42.37, -72.52], 13);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap'
   }).addTo(hiderMap);
