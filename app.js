@@ -294,6 +294,8 @@ async function startGameRound() {
   const startBtn = document.getElementById("startGameBtn");
   if (startBtn) { startBtn.disabled = true; startBtn.textContent = "Starting..."; }
 
+  gameStarting = true; // block pollState re-routing during start sequence
+
   const hideTime = parseInt(document.getElementById("hideTimeInput").value) * 60;
   const playAreaMiles = parseFloat(document.getElementById("playAreaInput").value) || null;
   const carMode = document.getElementById("carModeToggle").checked;
@@ -310,26 +312,24 @@ async function startGameRound() {
   startLocalTimer(estimatedStart, hideTime);
   startPollingFast();
 
-  let hostLat = null, hostLng = null;
-  try {
-    const pos = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
-    });
-    hostLat = pos.coords.latitude;
-    hostLng = pos.coords.longitude;
-  } catch (e) {
-    console.warn("[GPS] Could not get host position:", e);
-  }
+  // Use cached GPS — eliminates the 5s timeout that was blocking the start sequence
+  const hostLat = lastKnownPos ? lastKnownPos.lat : null;
+  const hostLng = lastKnownPos ? lastKnownPos.lng : null;
 
   const game = await apiPost("/game/start", {
     gameId: state.gameId, hostId: state.profile.id,
     hostLat, hostLng
   });
+
+  gameStarting = false; // release — polls can route again
+
   if (!game || game.error) {
     alert("Failed to start: " + (game?.error || "Unknown error"));
     return;
   }
+  // Re-sync timer to actual server hideStart, correcting estimated-start drift
   startLocalTimer(game.game.hideStart, hideTime);
+  if (state.gameData) state.gameData.hideStart = game.game.hideStart;
 }
 
 function renderHostPlayerList(game) {
@@ -399,16 +399,10 @@ function toggleQuestionMenu() {
 }
 
 async function askQuestion(question) {
-  let askerLat = null, askerLng = null;
-  try {
-    const pos = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
-    });
-    askerLat = pos.coords.latitude;
-    askerLng = pos.coords.longitude;
-  } catch (e) {
-    console.warn("[GPS] Could not get seeker position:", e);
-  }
+  // Use cached position from watchPosition — avoids slow/failing fresh GPS call
+  // which was causing auto-questions to silently fall back to manual
+  const askerLat = lastKnownPos ? lastKnownPos.lat : null;
+  const askerLng = lastKnownPos ? lastKnownPos.lng : null;
 
   const result = await apiPost("/game/ask_question", {
     gameId: state.gameId, playerId: state.profile.id, question,
@@ -626,6 +620,7 @@ function resetToSplash() {
 
 let elapsedClockStarted = false;
 let fastPollInterval = null;
+let gameStarting = false; // blocks pollState routing during start sequence
 
 function startPollingFast() {
   if (fastPollInterval) return;
@@ -647,9 +642,13 @@ async function pollState() {
   if (!game) return;
   if (game.error) {
     if (game.error === "Game not found") {
-      // Room was closed by host — go back to splash and clear session
       resetToSplash();
     }
+    return;
+  }
+  // Don't re-route while the start sequence is in flight
+  if (gameStarting) {
+    state.gameData = game;
     return;
   }
   state.gameData = game;
@@ -669,6 +668,13 @@ async function pollState() {
     elapsedClockStarted = false;
     if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
     stopPollingFast();
+    localHideEnd = null;
+  }
+
+  // If we locally transitioned to seek but server hasn't caught up yet, don't flicker back
+  if (game.status === "hide" && state.gameData && state.gameData.status === "seek") {
+    console.log("[Poll] Server still in hide, we're already in seek — skipping route");
+    return;
   }
 
   routeToScreen(game);
@@ -678,12 +684,17 @@ setInterval(pollState, 5000);
 
 // ---------- GPS ----------
 
+let lastKnownPos = null; // cached so auto-questions work without a fresh GPS call
+
 navigator.geolocation.watchPosition(pos => {
+  lastKnownPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
   if (!state.gameId || !state.profile) return;
   apiPost("/position/update", {
     gameId: state.gameId, playerId: state.profile.id,
     lat: pos.coords.latitude, lng: pos.coords.longitude
   });
+}, err => console.warn("[GPS] watchPosition error:", err), {
+  enableHighAccuracy: true, maximumAge: 10000
 });
 
 // ---------- Server Status ----------
