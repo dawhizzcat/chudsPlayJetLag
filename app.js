@@ -1,6 +1,7 @@
 initMap();
 
 // ---------- Session Persistence ----------
+// Save profile + gameId to localStorage so page refresh / phone kill doesn't lose the session
 
 function saveSession() {
   try {
@@ -25,6 +26,7 @@ function loadSession() {
   } catch(e) {}
 }
 
+// On page load: restore session and silently rejoin if we have a gameId
 async function tryResumeSession() {
   loadSession();
   if (!state.profile || !state.gameId) {
@@ -32,8 +34,11 @@ async function tryResumeSession() {
     return false;
   }
 
+  console.log("[Session] Attempting silent rejoin:", state.gameId);
+
   let game;
   try {
+    // Re-join to make sure we're in the player list (idempotent on backend)
     game = await apiPost("/game/join", {
       gameId: state.gameId,
       player: { id: state.profile.id, name: state.profile.name }
@@ -45,15 +50,20 @@ async function tryResumeSession() {
   }
 
   if (!game || game.error) {
+    // Game is gone — clear stale session silently
+    console.log("[Session] Game not found, clearing session");
     clearSession();
     state.gameId = null;
     document.getElementById("splashScreen").style.display = "";
     return false;
   }
 
+  console.log("[Session] Rejoined successfully, status:", game.status);
   state.gameData = game;
+
   hideSplash();
 
+  // Restore timers if mid-round
   if ((game.status === "hide" || game.status === "seek") && game.hideStart) {
     if (!elapsedClockStarted) {
       elapsedClockStarted = true;
@@ -65,64 +75,8 @@ async function tryResumeSession() {
     startPollingFast();
   }
 
-  // Set lastRoutedStatus so routeToScreen doesn't think we're transitioning in
-  lastRoutedStatus = game.status;
   routeToScreen(game);
   return true;
-}
-
-// ---------- Poll Lock ----------
-// Prevents background polls from overwriting intentional UI transitions.
-// Any action that changes screen sets this; poll will not call routeToScreen
-// while it's set, but will still update state.gameData for timers etc.
-
-let pollLocked = false;
-let pollLockTimer = null;
-
-function lockPoll(ms = 4000) {
-  pollLocked = true;
-  if (pollLockTimer) clearTimeout(pollLockTimer);
-  // Auto-release after ms so a stale lock never blocks forever
-  pollLockTimer = setTimeout(() => { pollLocked = false; }, ms);
-}
-
-function unlockPoll() {
-  pollLocked = false;
-  if (pollLockTimer) { clearTimeout(pollLockTimer); pollLockTimer = null; }
-}
-
-// ---------- GPS Cache ----------
-// Keep the last known position so questions don't need to wait for GPS
-
-let cachedPosition = null;
-
-navigator.geolocation.watchPosition(
-  pos => {
-    cachedPosition = pos;
-    if (!state.gameId || !state.profile) return;
-    apiPost("/position/update", {
-      gameId: state.gameId, playerId: state.profile.id,
-      lat: pos.coords.latitude, lng: pos.coords.longitude
-    });
-  },
-  err => console.warn("[GPS] watchPosition error:", err),
-  { enableHighAccuracy: true, maximumAge: 5000 }
-);
-
-function getPosition(timeoutMs = 3000) {
-  // Return cached position immediately if fresh enough (< 10s old)
-  if (cachedPosition && (Date.now() - cachedPosition.timestamp) < 10000) {
-    return Promise.resolve(cachedPosition);
-  }
-  return new Promise((resolve) => {
-    // Don't reject — just resolve with null so callers handle it gracefully
-    const t = setTimeout(() => resolve(null), timeoutMs);
-    navigator.geolocation.getCurrentPosition(
-      pos => { clearTimeout(t); cachedPosition = pos; resolve(pos); },
-      ()  => { clearTimeout(t); resolve(null); },
-      { enableHighAccuracy: true, timeout: timeoutMs }
-    );
-  });
 }
 
 // ---------- Timer ----------
@@ -148,8 +102,6 @@ function startLocalTimer(hideStart, hideTime) {
       timerInterval = null;
       if (state.gameData) {
         state.gameData.status = "seek";
-        lastRoutedStatus = "hide"; // so routeToScreen knows we're transitioning
-        unlockPoll();              // let the poll take over now
         routeToScreen(state.gameData);
         if (!elapsedClockStarted && state.gameData.hideStart) {
           elapsedClockStarted = true;
@@ -185,7 +137,7 @@ async function createProfile() {
     return;
   }
   state.profile = profile;
-  saveSession();
+  saveSession(); // persist immediately
   alert(`Profile created! Welcome, ${profile.name}`);
 }
 
@@ -225,10 +177,10 @@ async function joinGame() {
   }
 
   saveSession();
-  state.gameData = game;
-  hideSplash();
 
   if (game.status === "hide" || game.status === "seek") {
+    state.gameData = game;
+    hideSplash();
     if (game.hideStart && !elapsedClockStarted) {
       elapsedClockStarted = true;
       startElapsedClock(game.hideStart);
@@ -236,11 +188,17 @@ async function joinGame() {
     if (game.status === "hide" && game.hideStart && game.hideTime) {
       startLocalTimer(game.hideStart, game.hideTime);
     }
+    routeToScreen(game);
     startPollingFast();
+    return;
   }
 
-  lastRoutedStatus = game.status;
-  routeToScreen(game);
+  hideSplash();
+  if (game.hostId === state.profile.id) {
+    showScreen("hostScreen");
+  } else {
+    showScreen("waitingScreen");
+  }
 }
 
 function hideSplash() {
@@ -267,6 +225,7 @@ let lastRoutedStatus = null;
 function routeToScreen(game) {
   if (game.status === "lobby") {
     if (game.hostId === state.profile.id) {
+      // Only reset hider selection when transitioning INTO lobby, not on every poll
       if (lastRoutedStatus !== "lobby") {
         selectedHiderId = null;
         const startBtn = document.getElementById("startGameBtn");
@@ -320,45 +279,39 @@ async function startGameRound() {
 
   const hideTime = parseInt(document.getElementById("hideTimeInput").value) * 60;
   const playAreaMiles = parseFloat(document.getElementById("playAreaInput").value) || null;
-  const isHider = selectedHiderId === state.profile.id;
 
-  // Lock the poll immediately so it won't snap back to lobby screen
-  lockPoll(8000);
-
-  // Show the correct screen right away — don't wait for anything
-  showScreen(isHider ? "hiderScreen" : "seekerScreen");
-  lastRoutedStatus = "hide";
-
-  // Fire select_hider, GPS fetch, and a local timer estimate all in parallel
-  const [, pos] = await Promise.all([
-    apiPost("/game/select_hider", {
-      gameId: state.gameId, hiderId: selectedHiderId,
-      hostId: state.profile.id, hideTime, playAreaMiles
-    }),
-    getPosition(4000)
-  ]);
-
-  const hostLat = pos?.coords.latitude ?? null;
-  const hostLng = pos?.coords.longitude ?? null;
-
-  // Start an estimated timer immediately (will be corrected by server response)
-  startLocalTimer(Date.now() / 1000, hideTime);
-  startPollingFast();
-
-  const game = await apiPost("/game/start", {
-    gameId: state.gameId, hostId: state.profile.id, hostLat, hostLng
+  await apiPost("/game/select_hider", {
+    gameId: state.gameId, hiderId: selectedHiderId,
+    hostId: state.profile.id, hideTime, playAreaMiles
   });
 
-  if (!game || game.error) {
-    alert("Failed to start: " + (game?.error || "Unknown error"));
-    unlockPoll();
-    if (startBtn) { startBtn.disabled = false; startBtn.textContent = "🚀 Start Game"; }
-    return;
+  const isHider = selectedHiderId === state.profile.id;
+  showScreen(isHider ? "hiderScreen" : "seekerScreen");
+
+  const estimatedStart = Date.now() / 1000;
+  startLocalTimer(estimatedStart, hideTime);
+  startPollingFast();
+
+  let hostLat = null, hostLng = null;
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+    });
+    hostLat = pos.coords.latitude;
+    hostLng = pos.coords.longitude;
+  } catch (e) {
+    console.warn("[GPS] Could not get host position:", e);
   }
 
-  // Correct timer to actual server hideStart, release lock
+  const game = await apiPost("/game/start", {
+    gameId: state.gameId, hostId: state.profile.id,
+    hostLat, hostLng
+  });
+  if (!game || game.error) {
+    alert("Failed to start: " + (game?.error || "Unknown error"));
+    return;
+  }
   startLocalTimer(game.game.hideStart, hideTime);
-  unlockPoll();
 }
 
 function renderHostPlayerList(game) {
@@ -428,44 +381,24 @@ function toggleQuestionMenu() {
 }
 
 async function askQuestion(question) {
-  // Close the panel and show optimistic pending entry immediately
-  toggleQuestionMenu();
-
-  const optimisticQ = {
-    id: "__pending__",
-    question,
-    answer: null,
-    auto: false,
-    askedAt: Date.now() / 1000
-  };
-  if (state.gameData) {
-    state.gameData.questions.push(optimisticQ);
-    renderQuestionLog(state.gameData);
+  let askerLat = null, askerLng = null;
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+    });
+    askerLat = pos.coords.latitude;
+    askerLng = pos.coords.longitude;
+  } catch (e) {
+    console.warn("[GPS] Could not get seeker position:", e);
   }
-
-  // Get GPS from cache (instant if fresh) in parallel with sending the question
-  const pos = await getPosition(3000);
-  const askerLat = pos?.coords.latitude ?? null;
-  const askerLng = pos?.coords.longitude ?? null;
 
   const result = await apiPost("/game/ask_question", {
     gameId: state.gameId, playerId: state.profile.id, question,
     askerLat, askerLng
   });
-
-  if (!result || result.error) {
-    // Remove the optimistic entry on failure
-    if (state.gameData) {
-      state.gameData.questions = state.gameData.questions.filter(q => q.id !== "__pending__");
-      renderQuestionLog(state.gameData);
-    }
-    alert("Failed to send question.");
-    return;
-  }
-
-  // Replace optimistic entry with real one from server
+  if (!result || result.error) { alert("Failed to send question."); return; }
+  toggleQuestionMenu();
   if (state.gameData) {
-    state.gameData.questions = state.gameData.questions.filter(q => q.id !== "__pending__");
     state.gameData.questions.push(result.question);
     if (result.overlay) {
       state.gameData.overlays = state.gameData.overlays || [];
@@ -484,14 +417,9 @@ function renderQuestionLog(game) {
     const el = document.createElement("div");
     el.className = "question-entry";
     const autoTag = q.auto ? `<span class="q-auto-tag">⚡ Auto</span>` : "";
-    const isPending = q.id === "__pending__";
-    el.innerHTML = `<span class="q-text">❓ ${q.question} ${autoTag}</span>${
-      isPending
-        ? "<span class='q-pending'>Sending...</span>"
-        : q.answer
-          ? `<span class="q-answer">→ ${q.answer}</span>`
-          : "<span class='q-pending'>Awaiting answer...</span>"
-    }`;
+    el.innerHTML = `<span class="q-text">❓ ${q.question} ${autoTag}</span>${q.answer
+      ? `<span class="q-answer">→ ${q.answer}</span>`
+      : "<span class='q-pending'>Awaiting answer...</span>"}`;
     log.appendChild(el);
   });
 }
@@ -511,17 +439,12 @@ function updateChallengeOverlay(game) {
 }
 
 async function completeChallenge() {
-  // Optimistically hide immediately
-  document.getElementById("challengeOverlay").style.display = "none";
-  if (state.gameData) state.gameData.activeChallenge = null;
-
   const result = await apiPost("/game/complete_challenge", {
     gameId: state.gameId, playerId: state.profile.id
   });
-  if (!result || result.error) {
-    alert("Failed to complete challenge.");
-    // Poll will restore correct state
-  }
+  if (!result || result.error) { alert("Failed to complete challenge."); return; }
+  document.getElementById("challengeOverlay").style.display = "none";
+  if (state.gameData) state.gameData.activeChallenge = null;
 }
 
 // ---------- Found Hider ----------
@@ -543,10 +466,8 @@ async function foundHider() {
   if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
   elapsedClockStarted = false;
   localHideEnd = null;
-  unlockPoll();
 
   state.gameData = result.game;
-  lastRoutedStatus = "seek"; // ensure lobby transition resets hider selection
   routeToScreen(result.game);
 }
 
@@ -590,24 +511,14 @@ function renderHiderQuestions(game) {
 }
 
 async function answerQuestion(questionId, answer) {
-  // Optimistically update locally
+  const result = await apiPost("/game/answer_question", {
+    gameId: state.gameId, hiderId: state.profile.id, questionId, answer
+  });
+  if (!result || result.error) { alert("Failed to submit answer."); return; }
   if (state.gameData) {
     const q = state.gameData.questions.find(q => q.id === questionId);
     if (q) q.answer = answer;
     renderHiderSeekScreen(state.gameData);
-  }
-
-  const result = await apiPost("/game/answer_question", {
-    gameId: state.gameId, hiderId: state.profile.id, questionId, answer
-  });
-  if (!result || result.error) {
-    alert("Failed to submit answer.");
-    // Revert optimistic update — poll will restore truth
-    if (state.gameData) {
-      const q = state.gameData.questions.find(q => q.id === questionId);
-      if (q) q.answer = null;
-      renderHiderSeekScreen(state.gameData);
-    }
   }
 }
 
@@ -634,27 +545,13 @@ function renderHiderCards(game) {
 }
 
 async function playCard(cardId) {
-  // Optimistic update
-  if (state.gameData) {
-    const card = state.gameData.hiderCards.find(c => c.id === cardId);
-    if (card) card.played = true;
-    renderHiderSeekScreen(state.gameData);
-  }
-
   const result = await apiPost("/game/play_card", {
     gameId: state.gameId, hiderId: state.profile.id, cardId
   });
-  if (!result || result.error) {
-    alert("Failed to play card.");
-    // Revert
-    if (state.gameData) {
-      const card = state.gameData.hiderCards.find(c => c.id === cardId);
-      if (card) card.played = false;
-      renderHiderSeekScreen(state.gameData);
-    }
-    return;
-  }
+  if (!result || result.error) { alert("Failed to play card."); return; }
   if (state.gameData) {
+    const card = state.gameData.hiderCards.find(c => c.id === cardId);
+    if (card) card.played = true;
     state.gameData.bonusTime = result.bonusTime;
     if (result.activeChallenge) state.gameData.activeChallenge = result.activeChallenge;
     renderHiderSeekScreen(state.gameData);
@@ -689,14 +586,12 @@ function resetToSplash() {
   state.gameId = null;
   state.gameData = null;
   selectedHiderId = null;
-  clearSession();
-  unlockPoll();
+  clearSession();           // wipe localStorage so we don't re-rejoin a dead game
   stopPollingFast();
   if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   elapsedClockStarted = false;
   localHideEnd = null;
-  lastRoutedStatus = null;
   document.getElementById("splashScreen").style.display = "";
   showScreen("__none__");
 }
@@ -705,11 +600,10 @@ function resetToSplash() {
 
 let elapsedClockStarted = false;
 let fastPollInterval = null;
-let pollInFlight = false; // prevent overlapping poll requests
 
 function startPollingFast() {
   if (fastPollInterval) return;
-  fastPollInterval = setInterval(pollState, 1500);
+  fastPollInterval = setInterval(pollState, 1000);
 }
 function stopPollingFast() {
   if (fastPollInterval) { clearInterval(fastPollInterval); fastPollInterval = null; }
@@ -717,25 +611,21 @@ function stopPollingFast() {
 
 async function pollState() {
   if (!state.gameId || !state.profile) return;
-  if (pollInFlight) return; // skip if previous poll hasn't returned yet
-  pollInFlight = true;
-
   let game;
   try {
     game = await apiGet(`/state/${state.gameId}`);
   } catch (e) {
     console.warn("[Poll] Network error:", e);
-    pollInFlight = false;
-    return;
+    return; // silent — just try again next interval
   }
-  pollInFlight = false;
-
   if (!game) return;
   if (game.error) {
-    if (game.error === "Game not found") resetToSplash();
+    if (game.error === "Game not found") {
+      // Room was closed by host — go back to splash and clear session
+      resetToSplash();
+    }
     return;
   }
-
   state.gameData = game;
 
   if ((game.status === "hide" || game.status === "seek") && game.hideStart && !elapsedClockStarted) {
@@ -753,25 +643,22 @@ async function pollState() {
     elapsedClockStarted = false;
     if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
     stopPollingFast();
-    unlockPoll();
   }
 
-  // Only call routeToScreen if nothing has locked us out of it
-  if (!pollLocked) {
-    routeToScreen(game);
-  } else {
-    // Still update live data that doesn't affect screen choice
-    if (game.status === "seek" && game.hiderId !== state.profile.id) {
-      updateSeekerMarkers(game);
-      updateChallengeOverlay(game);
-    }
-    if (game.status === "seek" && game.hiderId === state.profile.id) {
-      renderHiderSeekScreen(game);
-    }
-  }
+  routeToScreen(game);
 }
 
 setInterval(pollState, 5000);
+
+// ---------- GPS ----------
+
+navigator.geolocation.watchPosition(pos => {
+  if (!state.gameId || !state.profile) return;
+  apiPost("/position/update", {
+    gameId: state.gameId, playerId: state.profile.id,
+    lat: pos.coords.latitude, lng: pos.coords.longitude
+  });
+});
 
 // ---------- Server Status ----------
 
@@ -790,4 +677,5 @@ setInterval(checkServerStatus, 3000);
 checkServerStatus();
 
 // ---------- Boot ----------
+// Try to resume a saved session; if not, show splash normally
 tryResumeSession();
