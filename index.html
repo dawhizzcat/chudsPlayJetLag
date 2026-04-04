@@ -1,28 +1,29 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Jet Lag IRL</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-</head>
-<body>
-
 <div id="menu">
-  <input id="nameInput" placeholder="Enter name">
-  <button onclick="createProfile()">Create Profile</button>
+  <div id="homeScreen">
+    <input id="nameInput" placeholder="Enter name">
+    <input id="gameIdInput" placeholder="Game ID">
+    <button onclick="createProfile()">Create Profile</button>
+    <button onclick="createGameFromInput()">Create Game</button>
+    <button onclick="joinGame()">Join Game</button>
+  </div>
 
-  <button onclick="createGameFromInput()">Create Game</button>
-  <input id="gameIdInput" placeholder="Game ID">
-  <button onclick="joinGame()">Join Game</button>
+  <div id="waitingScreen" style="display:none">
+    Waiting for the host to start the game...
+  </div>
+
+  <div id="hiderScreen" style="display:none">
+    <h3>You are the Hider!</h3>
+    <div id="hiderCards"></div>
+  </div>
+
+  <div id="seekerScreen" style="display:none">
+    <h3>You are a Seeker!</h3>
+    <div id="questionMenu"></div>
+  </div>
+
+  <div id="hostScreen" style="display:none">
+    <h3>You are the Host</h3>
+    <p>Select a hider:</p>
+    <div id="hostPlayerList"></div>
+  </div>
 </div>
-
-<div id="map"></div>
-
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="api.js"></script>
-<script src="state.js"></script>
-<script src="map.js"></script>
-<script src="app.js"></script>
-
-</body>
-</html>
