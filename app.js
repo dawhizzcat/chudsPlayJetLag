@@ -8,9 +8,10 @@ async function createProfile() {
   localStorage.setItem("profile", JSON.stringify(profile));
 }
 
-async function createGame() {
-  const game = await apiPost("/game/create", {});
-  state.gameId = game.gameId;
+async function createGame(gameId) {
+  return await apiPost("/game/create", {
+    gameId: gameId
+  });
 }
 
 async function joinGame() {
