@@ -61,6 +61,11 @@ async function createGameFromInput() {
     state.gameId = null;
     return;
   }
+  // Host joins as a player too
+  await apiPost("/game/join", {
+    gameId: state.gameId,
+    player: { id: state.profile.id, name: state.profile.name }
+  });
   hideMenu();
   showScreen("hostScreen");
 }
@@ -79,8 +84,20 @@ async function joinGame() {
     state.gameId = null;
     return;
   }
+
+  // Mid-round rejoin: route to correct screen immediately
+  if (game.status === "hide" || game.status === "seek") {
+    state.gameData = game;
+    routeToScreen(game);
+    return;
+  }
+
   hideMenu();
-  showScreen("waitingScreen");
+  if (game.hostId === state.profile.id) {
+    showScreen("hostScreen");
+  } else {
+    showScreen("waitingScreen");
+  }
 }
 
 function hideMenu() {
@@ -101,6 +118,43 @@ function showScreen(screenId) {
   }
 }
 
+// Route a player to the right screen based on game state (used for rejoins + normal poll)
+function routeToScreen(game) {
+  hideMenu();
+
+  if (game.status === "lobby") {
+    if (game.hostId === state.profile.id) {
+      showScreen("hostScreen");
+      renderHostPlayerList(game);
+    } else {
+      showScreen("waitingScreen");
+    }
+    renderScores(game);
+
+  } else if (game.status === "hide") {
+    if (game.hiderId === state.profile.id) {
+      showScreen("hiderScreen");
+    } else {
+      showScreen("seekerScreen");
+    }
+
+  } else if (game.status === "seek") {
+    if (game.hiderId === state.profile.id) {
+      showScreen("hiderSeekScreen");
+      renderHiderSeekScreen(game);
+    } else {
+      showScreen("seekMapScreen");
+      updateSeekerMarkers(game);
+      renderQuestionLog(game);
+      updateChallengeOverlay(game);
+      updateOverlays(game.overlays, game.playAreaCenter, game.playAreaMiles);
+      if (game.playAreaCenter && game.playAreaMiles) {
+        updatePlayArea(game.playAreaCenter, game.playAreaMiles);
+      }
+    }
+  }
+}
+
 // ---------- Host Controls ----------
 
 let selectedHiderId = null;
@@ -113,11 +167,29 @@ async function selectHider(hiderId) {
 
 async function startGameRound() {
   const hideTime = parseInt(document.getElementById("hideTimeInput").value);
+  const playAreaMiles = parseFloat(document.getElementById("playAreaInput").value) || null;
+
   await apiPost("/game/select_hider", {
     gameId: state.gameId, hiderId: selectedHiderId,
-    hostId: state.profile.id, hideTime
+    hostId: state.profile.id, hideTime, playAreaMiles
   });
-  const game = await apiPost("/game/start", { gameId: state.gameId, hostId: state.profile.id });
+
+  // Grab host GPS for play area center
+  let hostLat = null, hostLng = null;
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+    });
+    hostLat = pos.coords.latitude;
+    hostLng = pos.coords.longitude;
+  } catch (e) {
+    console.warn("[GPS] Could not get host position for play area center:", e);
+  }
+
+  const game = await apiPost("/game/start", {
+    gameId: state.gameId, hostId: state.profile.id,
+    hostLat, hostLng
+  });
   if (!game || game.error) {
     alert("Failed to start: " + (game?.error || "Unknown error"));
     return;
@@ -128,19 +200,45 @@ async function startGameRound() {
 function renderHostPlayerList(game) {
   const container = document.getElementById("hostPlayerList");
   container.innerHTML = "";
+  // All players including host can be selected as hider
   game.players.forEach(p => {
-    if (p.id !== state.profile.id) {
-      const btn = document.createElement("button");
-      btn.textContent = `${p.name}${selectedHiderId === p.id ? " ✅" : ""}`;
-      btn.onclick = () => selectHider(p.id);
-      container.appendChild(btn);
-    }
+    const btn = document.createElement("button");
+    btn.textContent = `${p.name}${selectedHiderId === p.id ? " ✅" : ""}`;
+    btn.onclick = () => selectHider(p.id);
+    container.appendChild(btn);
+  });
+}
+
+// ---------- Scores ----------
+
+function renderScores(game) {
+  const container = document.getElementById("scoresList");
+  if (!container) return;
+  const scores = game.scores || [];
+  if (scores.length === 0) {
+    container.innerHTML = "<p class='empty-msg'>No rounds played yet.</p>";
+    return;
+  }
+  container.innerHTML = "";
+  // Sort by totalTime descending (longest hidden = best)
+  [...scores].sort((a, b) => b.totalTime - a.totalTime).forEach((s, i) => {
+    const el = document.createElement("div");
+    el.className = "score-entry";
+    const mins = Math.floor(s.totalTime / 60);
+    const secs = String(s.totalTime % 60).padStart(2, "0");
+    const bonus = s.bonusTime > 0 ? ` <span class="score-bonus">(+${s.bonusTime}s bonus)</span>` : "";
+    el.innerHTML = `
+      <span class="score-rank">#${i + 1}</span>
+      <span class="score-name">${s.hiderName}</span>
+      <span class="score-time">${mins}:${secs}${bonus}</span>`;
+    container.appendChild(el);
   });
 }
 
 // ---------- Question Menu (Seekers) ----------
 
 const QUESTIONS = [
+  // Manual questions
   "Are you within 500m of a road?",
   "Are you indoors?",
   "Are you within 1km of water?",
@@ -149,6 +247,15 @@ const QUESTIONS = [
   "Are you within 1km of the start point?",
   "Can you see a landmark?",
   "Are you moving?",
+  // Auto-evaluated questions (server handles these)
+  "Are you within 500m of me?",
+  "Are you within 1km of me?",
+  "Are you within 2km of me?",
+  "Are you within 3km of me?",
+  "Are you north of me?",
+  "Are you south of me?",
+  "Are you east of me?",
+  "Are you west of me?",
 ];
 
 function toggleQuestionMenu() {
@@ -156,14 +263,32 @@ function toggleQuestionMenu() {
   panel.style.display = panel.style.display === "none" ? "block" : "none";
 }
 
+// Get seeker's current position and send with question so server can auto-evaluate
 async function askQuestion(question) {
+  let askerLat = null, askerLng = null;
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+    });
+    askerLat = pos.coords.latitude;
+    askerLng = pos.coords.longitude;
+  } catch (e) {
+    console.warn("[GPS] Could not get seeker position for auto-question:", e);
+  }
+
   const result = await apiPost("/game/ask_question", {
-    gameId: state.gameId, playerId: state.profile.id, question
+    gameId: state.gameId, playerId: state.profile.id, question,
+    askerLat, askerLng
   });
   if (!result || result.error) { alert("Failed to send question."); return; }
   toggleQuestionMenu();
   if (state.gameData) {
     state.gameData.questions.push(result.question);
+    if (result.overlay) {
+      state.gameData.overlays = state.gameData.overlays || [];
+      state.gameData.overlays.push(result.overlay);
+      updateOverlays(state.gameData.overlays, state.gameData.playAreaCenter, state.gameData.playAreaMiles);
+    }
     renderQuestionLog(state.gameData);
   }
 }
@@ -175,7 +300,8 @@ function renderQuestionLog(game) {
   game.questions.slice().reverse().forEach(q => {
     const el = document.createElement("div");
     el.className = "question-entry";
-    el.innerHTML = `<span class="q-text">❓ ${q.question}</span>${q.answer
+    const autoTag = q.auto ? `<span class="q-auto-tag">⚡ Auto</span>` : "";
+    el.innerHTML = `<span class="q-text">❓ ${q.question} ${autoTag}</span>${q.answer
       ? `<span class="q-answer">→ ${q.answer}</span>`
       : "<span class='q-pending'>Awaiting answer...</span>"}`;
     log.appendChild(el);
@@ -203,9 +329,32 @@ async function completeChallenge() {
     playerId: state.profile.id
   });
   if (!result || result.error) { alert("Failed to complete challenge."); return; }
-  // Hide overlay immediately, poll will confirm
   document.getElementById("challengeOverlay").style.display = "none";
   if (state.gameData) state.gameData.activeChallenge = null;
+}
+
+// ---------- Found Hider ----------
+
+async function foundHider() {
+  if (!confirm("Confirm: you have found the hider?")) return;
+  const result = await apiPost("/game/found", {
+    gameId: state.gameId,
+    seekerId: state.profile.id
+  });
+  if (!result || result.error) { alert("Error: " + (result?.error || "Unknown")); return; }
+
+  // Show result briefly then go to lobby
+  const s = result.score;
+  const mins = Math.floor(s.totalTime / 60);
+  const secs = String(s.totalTime % 60).padStart(2, "0");
+  alert(`${s.hiderName} was hidden for ${mins}:${secs} (${s.elapsed}s + ${s.bonusTime}s bonus)!`);
+
+  // Stop clocks
+  if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+  elapsedClockStarted = false;
+
+  state.gameData = result.game;
+  routeToScreen(result.game);
 }
 
 // ---------- Hider Seek Screen ----------
@@ -324,32 +473,13 @@ async function pollState() {
     startLocalTimer(game.hideStart, game.hideTime);
   }
 
+  // When game returns to lobby, reset elapsed clock flag
   if (game.status === "lobby") {
-    if (game.hostId === state.profile.id) {
-      showScreen("hostScreen");
-      renderHostPlayerList(game);
-    } else {
-      showScreen("waitingScreen");
-    }
-
-  } else if (game.status === "hide") {
-    if (game.hiderId === state.profile.id) {
-      showScreen("hiderScreen");
-    } else {
-      showScreen("seekerScreen");
-    }
-
-  } else if (game.status === "seek") {
-    if (game.hiderId === state.profile.id) {
-      showScreen("hiderSeekScreen");
-      renderHiderSeekScreen(game);
-    } else {
-      showScreen("seekMapScreen");
-      updateSeekerMarkers(game);
-      renderQuestionLog(game);
-      updateChallengeOverlay(game); // show/hide challenge blocking screen
-    }
+    elapsedClockStarted = false;
+    if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
   }
+
+  routeToScreen(game);
 }
 
 setInterval(pollState, 5000);

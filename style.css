@@ -90,6 +90,9 @@ body {
   text-align: center;
   min-width: 280px;
   max-width: 420px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 8px 40px rgba(0,0,0,0.5);
 }
 .screen-card h2 { font-size: 1.6rem; margin-bottom: 20px; color: #fff; }
@@ -108,6 +111,40 @@ body {
 .screen-card button:hover { background: #1d4ed8; }
 #startGameBtn { margin-top: 16px; background: #16a34a !important; }
 #startGameBtn:hover { background: #15803d !important; }
+
+.panel-divider {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin: 20px 0;
+}
+
+/* ---- Scores Panel ---- */
+.scores-panel {
+  text-align: left;
+  margin-bottom: 4px;
+}
+.scores-panel h3 {
+  font-size: 0.95rem;
+  color: #facc15;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.score-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #14142a;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+.score-rank  { color: #facc15; font-weight: 800; min-width: 24px; }
+.score-name  { flex: 1; color: #fff; font-weight: 600; }
+.score-time  { color: #4ade80; font-weight: 700; font-size: 13px; }
+.score-bonus { color: #a78bfa; font-size: 11px; font-weight: 400; }
 
 /* ---- Countdown Timer ---- */
 .timer-display { margin-top: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -167,7 +204,7 @@ body {
   backdrop-filter: blur(6px);
   overflow-y: auto;
   padding: 20px;
-  padding-top: 60px; /* room for elapsed badge */
+  padding-top: 60px;
 }
 
 .hider-panel {
@@ -270,6 +307,27 @@ body {
 }
 .question-btn:hover { background: #1d4ed8; transform: scale(1.04); }
 
+/* ---- Found Hider Button ---- */
+.found-btn {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 32px;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+  z-index: 210;
+  box-shadow: 0 4px 24px rgba(220,38,38,0.5);
+  transition: background 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+.found-btn:hover { background: #b91c1c; transform: translateX(-50%) scale(1.04); }
+
 .question-panel {
   position: absolute;
   top: 64px; right: 16px;
@@ -298,6 +356,17 @@ body {
 .q-text    { display: block; color: #ccc; margin-bottom: 4px; }
 .q-answer  { display: block; color: #4ade80; font-weight: 600; }
 .q-pending { display: block; color: #facc15; font-style: italic; }
+.q-auto-tag {
+  display: inline-block;
+  font-size: 10px;
+  background: #7c3aed;
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+  font-weight: 700;
+}
 
 /* ---- Player Markers ---- */
 .player-marker { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -353,46 +422,14 @@ body {
   to   { transform: scale(1);   opacity: 1; }
 }
 
-.challenge-icon {
-  font-size: 3rem;
-  margin-bottom: 12px;
-}
-
-.challenge-title {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #f97316;
-  margin-bottom: 14px;
-}
-
-.challenge-desc {
-  font-size: 15px;
-  color: #ccc;
-  line-height: 1.5;
-  margin-bottom: 28px;
-}
+.challenge-icon { font-size: 3rem; margin-bottom: 12px; }
+.challenge-title { font-size: 1.5rem; font-weight: 800; color: #f97316; margin-bottom: 14px; }
+.challenge-desc { font-size: 15px; color: #ccc; line-height: 1.5; margin-bottom: 28px; }
 
 .challenge-done-btn {
-  width: 100%;
-  padding: 14px;
-  border-radius: 12px;
-  border: none;
-  background: #16a34a;
-  color: #fff;
-  font-size: 16px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
-  margin-bottom: 10px;
+  width: 100%; padding: 14px; border-radius: 12px; border: none;
+  background: #16a34a; color: #fff; font-size: 16px; font-weight: 800;
+  cursor: pointer; transition: background 0.2s, transform 0.1s; margin-bottom: 10px;
 }
-
-.challenge-done-btn:hover {
-  background: #15803d;
-  transform: scale(1.02);
-}
-
-.challenge-note {
-  font-size: 11px;
-  color: #666;
-  font-style: italic;
-}
+.challenge-done-btn:hover { background: #15803d; transform: scale(1.02); }
+.challenge-note { font-size: 11px; color: #666; font-style: italic; }
