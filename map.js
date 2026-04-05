@@ -54,17 +54,22 @@ function updateHiderMap(game) {
     const isHider = id === game.hiderId;
     const dotClass = isHider ? "marker-dot marker-dot-hider" : "marker-dot";
     const html = `<div class="player-marker"><div class="${dotClass}"></div><div class="marker-label">${label}</div></div>`;
+    const icon = L.divIcon({ className: '', html, iconAnchor: [20, 20] });
 
     if (!hiderMarkers[id]) {
-      const icon = L.divIcon({ className: '', html, iconAnchor: [20, 20] });
       hiderMarkers[id] = L.marker([pos.lat, pos.lng], { icon }).addTo(hiderMap);
+      hiderMarkers[id]._jetlagDotClass = dotClass;
     } else {
       hiderMarkers[id].setLatLng([pos.lat, pos.lng]);
+      // Recreate icon if role changed (e.g. hiderId resolved after marker was first drawn)
+      if (hiderMarkers[id]._jetlagDotClass !== dotClass) {
+        hiderMarkers[id].setIcon(icon);
+        hiderMarkers[id]._jetlagDotClass = dotClass;
+      }
     }
   }
 
-  // Overlays — only redraw if the number of overlays has changed.
-  // Redrawing every poll causes constant layer flicker on the hider map.
+  // Overlays — only redraw when count changes to avoid flicker on every poll
   const overlayCount = (game.overlays || []).length;
   if (overlayCount !== hiderOverlayLayers.length) {
     hiderOverlayLayers.forEach(l => hiderMap.removeLayer(l));
