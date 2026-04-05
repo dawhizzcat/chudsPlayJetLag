@@ -130,7 +130,16 @@ function startElapsedClock(hideStart) {
 
 // ---------- Profile / Game Setup ----------
 
+// ---------- Offline Guard ----------
+
+function isOffline() {
+  // navigator.onLine is fast but not always accurate — we also track
+  // server reachability via serverOnline flag updated by checkServerStatus
+  return !navigator.onLine || !serverOnline;
+}
+
 async function createProfile() {
+  if (isOffline()) { alert("You appear to be offline. Check your connection and try again."); return; }
   const name = document.getElementById("nameInput").value.trim() || "Player";
   const profile = await apiPost("/profile/create", { name });
   if (!profile || profile.error || !profile.id) {
@@ -143,6 +152,7 @@ async function createProfile() {
 }
 
 async function createGameFromInput() {
+  if (isOffline()) { alert("You appear to be offline. Check your connection and try again."); return; }
   const inputGameId = document.getElementById("gameIdInput").value.trim();
   if (!inputGameId) return alert("Please enter a game ID.");
   if (!state.profile) return alert("Please create a profile first.");
@@ -163,6 +173,7 @@ async function createGameFromInput() {
 }
 
 async function joinGame() {
+  if (isOffline()) { alert("You appear to be offline. Check your connection and try again."); return; }
   if (!state.profile) return alert("Create a profile first!");
   const inputGameId = document.getElementById("gameIdInput").value.trim();
   if (!inputGameId) return alert("Enter a game ID!");
@@ -399,9 +410,17 @@ function toggleQuestionMenu() {
   if (!isOpen) panel.style.flexDirection = "column";
 }
 
+// Questions pending server response — greyed out in the menu until answered or failed
+const pendingQuestions = new Set();
+
 async function askQuestion(question) {
-  // Use cached position from watchPosition — avoids slow/failing fresh GPS call
-  // which was causing auto-questions to silently fall back to manual
+  if (pendingQuestions.has(question)) return; // already in flight, ignore tap
+
+  // Close menu and mark pending immediately — feels instant
+  toggleQuestionMenu();
+  pendingQuestions.add(question);
+  renderQuestionButtons(); // grey out the button right away
+
   const askerLat = lastKnownPos ? lastKnownPos.lat : null;
   const askerLng = lastKnownPos ? lastKnownPos.lng : null;
 
@@ -409,8 +428,12 @@ async function askQuestion(question) {
     gameId: state.gameId, playerId: state.profile.id, question,
     askerLat, askerLng
   });
+
+  pendingQuestions.delete(question);
+  renderQuestionButtons(); // restore button
+
   if (!result || result.error) { alert("Failed to send question."); return; }
-  toggleQuestionMenu();
+
   if (state.gameData) {
     state.gameData.questions.push(result.question);
     if (result.overlay) {
@@ -420,6 +443,25 @@ async function askQuestion(question) {
     }
     renderQuestionLog(state.gameData);
   }
+}
+
+function renderQuestionButtons() {
+  // Also grey out questions that are already unanswered in the log
+  const unansweredQuestions = new Set(
+    (state.gameData?.questions || [])
+      .filter(q => !q.answer)
+      .map(q => q.question)
+  );
+  const list = document.getElementById("questionList");
+  if (!list) return;
+  list.querySelectorAll(".question-option").forEach(btn => {
+    const q = btn.dataset.question;
+    const blocked = pendingQuestions.has(q) || unansweredQuestions.has(q);
+    btn.disabled = blocked;
+    btn.style.opacity = blocked ? "0.4" : "";
+    btn.style.cursor = blocked ? "not-allowed" : "";
+    btn.title = blocked ? "Awaiting answer..." : "";
+  });
 }
 
 function renderQuestionLog(game) {
@@ -439,24 +481,78 @@ function renderQuestionLog(game) {
 
 // ---------- Challenge Overlay ----------
 
+// Challenges with enforced durations (seconds). Name must match card name exactly.
+const CHALLENGE_DURATIONS = {
+  "Slowpoke": 120,
+  "Wrong Way": 120,  // generous — they need time to walk 200m back too
+  "U-Turn": 600,
+};
+
+let challengeTimerInterval = null;
+let currentChallengeId = null; // track which challenge the timer belongs to
+
 function updateChallengeOverlay(game) {
   const overlay = document.getElementById("challengeOverlay");
   const challenge = game.activeChallenge;
-  if (challenge) {
-    document.getElementById("challengeName").textContent = challenge.name;
-    document.getElementById("challengeDesc").textContent = challenge.desc;
-    overlay.style.display = "flex";
-  } else {
+
+  if (!challenge) {
     overlay.style.display = "none";
+    if (challengeTimerInterval) { clearInterval(challengeTimerInterval); challengeTimerInterval = null; }
+    currentChallengeId = null;
+    return;
+  }
+
+  document.getElementById("challengeName").textContent = challenge.name;
+  document.getElementById("challengeDesc").textContent = challenge.desc;
+  overlay.style.display = "flex";
+
+  const duration = CHALLENGE_DURATIONS[challenge.name] || 0;
+  const timerEl = document.getElementById("challengeTimer");
+  const doneBtn = document.getElementById("challengeDoneBtn");
+
+  // Only (re)start the timer if this is a new challenge
+  if (challenge.id !== currentChallengeId) {
+    currentChallengeId = challenge.id;
+    if (challengeTimerInterval) { clearInterval(challengeTimerInterval); challengeTimerInterval = null; }
+
+    if (duration > 0) {
+      const endTime = (challenge.playedAt * 1000) + (duration * 1000);
+      timerEl.style.display = "block";
+      doneBtn.disabled = true;
+      doneBtn.style.opacity = "0.4";
+
+      challengeTimerInterval = setInterval(() => {
+        const remaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+        const m = Math.floor(remaining / 60);
+        const s = String(remaining % 60).padStart(2, "0");
+        timerEl.textContent = `⏳ ${m}:${s} remaining`;
+        if (remaining === 0) {
+          clearInterval(challengeTimerInterval);
+          challengeTimerInterval = null;
+          timerEl.textContent = "✅ Time's up — you may complete the challenge!";
+          doneBtn.disabled = false;
+          doneBtn.style.opacity = "";
+        }
+      }, 1000);
+    } else {
+      // No enforced duration — show immediately completable
+      timerEl.style.display = "none";
+      doneBtn.disabled = false;
+      doneBtn.style.opacity = "";
+    }
   }
 }
 
 async function completeChallenge() {
+  const doneBtn = document.getElementById("challengeDoneBtn");
+  if (doneBtn && doneBtn.disabled) return; // timer hasn't expired yet
   const result = await apiPost("/game/complete_challenge", {
     gameId: state.gameId, playerId: state.profile.id
   });
   if (!result || result.error) { alert("Failed to complete challenge."); return; }
   document.getElementById("challengeOverlay").style.display = "none";
+  if (challengeTimerInterval) { clearInterval(challengeTimerInterval); challengeTimerInterval = null; }
+  currentChallengeId = null;
   if (state.gameData) state.gameData.activeChallenge = null;
 }
 
@@ -706,15 +802,46 @@ navigator.geolocation.watchPosition(pos => {
 
 // ---------- Server Status ----------
 
+let serverOnline = true; // tracks last known server reachability
+let offlineStrikes = 0;  // require 2 consecutive failures before acting (avoids single blip)
+
 async function checkServerStatus() {
   const el = document.getElementById("serverStatus");
   try {
-    await fetch(baseUrl + "/", { headers: { "ngrok-skip-browser-warning": "123" } });
+    await fetch(baseUrl + "/", {
+      headers: { "ngrok-skip-browser-warning": "123" },
+      signal: AbortSignal.timeout(4000) // don't wait forever
+    });
     el.textContent = "Server: Online";
     el.style.background = "rgba(0, 150, 0, 0.7)";
+    serverOnline = true;
+    offlineStrikes = 0;
   } catch (e) {
+    offlineStrikes++;
     el.textContent = "Server: Offline";
     el.style.background = "rgba(150, 0, 0, 0.7)";
+    // Only act after 2 consecutive failures to avoid false positives
+    if (offlineStrikes >= 2) {
+      serverOnline = false;
+      // If we're in a game, silently leave (session preserved so they can rejoin)
+      if (state.gameId) {
+        console.warn("[Offline] Server unreachable — leaving room to prevent stuck state");
+        // Same as leaveGame() but without the confirm dialog
+        state.gameId = null;
+        state.gameData = null;
+        selectedHiderId = null;
+        try { localStorage.setItem("jl_gameId", ""); } catch(err) {}
+        stopPollingFast();
+        if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        elapsedClockStarted = false;
+        localHideEnd = null;
+        lastRoutedStatus = null;
+        document.getElementById("splashScreen").style.display = "";
+        showScreen("__none__");
+        alert("Lost connection to server. You have been returned to the lobby. Rejoin when back online.");
+      }
+    }
   }
 }
 setInterval(checkServerStatus, 3000);

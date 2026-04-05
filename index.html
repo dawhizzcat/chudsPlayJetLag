@@ -175,7 +175,8 @@
       <div class="challenge-icon">🤤</div>
       <h2 class="challenge-title" id="challengeName"></h2>
       <p class="challenge-desc" id="challengeDesc"></p>
-      <button class="challenge-done-btn" onclick="completeChallenge()">✅ Challenge Completed!</button>
+      <p id="challengeTimer" class="challenge-timer" style="display:none;"></p>
+      <button id="challengeDoneBtn" class="challenge-done-btn" onclick="completeChallenge()">✅ Challenge Completed!</button>
       <p class="challenge-note">Any seeker can mark this done for the whole team.</p>
     </div>
   </div>
@@ -196,6 +197,7 @@
     QUESTIONS.forEach(q => {
       const btn = document.createElement("button");
       btn.className = "question-option";
+      btn.dataset.question = q; // needed for greying out pending/unanswered questions
       const isAuto = q.toLowerCase().includes("of me");
       btn.textContent = q + (isAuto ? " ⚡" : "");
       btn.onclick = () => askQuestion(q);
