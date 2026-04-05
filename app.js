@@ -236,16 +236,13 @@ function showScreen(screenId) {
     setTimeout(() => map.invalidateSize(), 100);
   }
   if (screenId === "hiderSeekScreen") {
-    // Only init the map if it doesn't exist yet — calling initHiderMap() on every
-    // poll destroys and recreates the map each time, causing constant zoom resets
-    if (!hiderMap) {
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          initHiderMap();
-          if (state.gameData) updateHiderMap(state.gameData);
-        }, 150);
-      });
-    }
+    // Use rAF + timeout so the flex layout has fully painted before Leaflet measures
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        initHiderMap();
+        if (state.gameData) updateHiderMap(state.gameData);
+      }, 150);
+    });
   }
 }
 
@@ -276,7 +273,8 @@ function routeToScreen(game) {
 
   } else if (game.status === "seek") {
     if (game.hiderId === state.profile.id) {
-      // Only call showScreen (which would re-init the map) on transition, not every poll
+      // Only call showScreen on transition into seek — not every poll.
+      // showScreen triggers initHiderMap which resets zoom/overlays.
       if (lastRoutedStatus !== "seek") {
         showScreen("hiderSeekScreen");
       }
@@ -765,6 +763,13 @@ async function pollState() {
   if (gameStarting) {
     state.gameData = game;
     return;
+  }
+  // Merge overlays: if server returns fewer overlays than we already have locally,
+  // keep the local ones. This prevents a poll that lands between a question being
+  // asked and the server write completing from wiping overlays off the map.
+  if (state.gameData && game.overlays && state.gameData.overlays &&
+      state.gameData.overlays.length > game.overlays.length) {
+    game.overlays = state.gameData.overlays;
   }
   state.gameData = game;
 

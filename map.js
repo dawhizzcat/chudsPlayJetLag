@@ -63,18 +63,22 @@ function updateHiderMap(game) {
     }
   }
 
-  // Overlays (reuse existing geometry builders)
-  hiderOverlayLayers.forEach(l => hiderMap.removeLayer(l));
-  hiderOverlayLayers = [];
-  const bounds = (game.playAreaCenter && game.playAreaMiles)
-    ? getPlayAreaBounds(game.playAreaCenter, game.playAreaMiles) : null;
-  const BIG = bounds ? null : 10;
-  (game.overlays || []).forEach(overlay => {
-    let layer = null;
-    if (overlay.type === "radius") layer = buildRadiusOverlay(overlay, bounds, BIG);
-    else if (overlay.type === "half") layer = buildHalfPlaneOverlay(overlay, bounds, BIG);
-    if (layer) { layer.addTo(hiderMap); hiderOverlayLayers.push(layer); }
-  });
+  // Overlays — only redraw if the number of overlays has changed.
+  // Redrawing every poll causes constant layer flicker on the hider map.
+  const overlayCount = (game.overlays || []).length;
+  if (overlayCount !== hiderOverlayLayers.length) {
+    hiderOverlayLayers.forEach(l => hiderMap.removeLayer(l));
+    hiderOverlayLayers = [];
+    const bounds = (game.playAreaCenter && game.playAreaMiles)
+      ? getPlayAreaBounds(game.playAreaCenter, game.playAreaMiles) : null;
+    const BIG = bounds ? null : 10;
+    (game.overlays || []).forEach(overlay => {
+      let layer = null;
+      if (overlay.type === "radius") layer = buildRadiusOverlay(overlay, bounds, BIG);
+      else if (overlay.type === "half") layer = buildHalfPlaneOverlay(overlay, bounds, BIG);
+      if (layer) { layer.addTo(hiderMap); hiderOverlayLayers.push(layer); }
+    });
+  }
 
   // Play area boundary
   if (!game.playAreaCenter || !game.playAreaMiles) {
