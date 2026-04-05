@@ -236,13 +236,16 @@ function showScreen(screenId) {
     setTimeout(() => map.invalidateSize(), 100);
   }
   if (screenId === "hiderSeekScreen") {
-    // Use rAF + timeout so the flex layout has fully painted before Leaflet measures
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        initHiderMap();
-        if (state.gameData) updateHiderMap(state.gameData);
-      }, 150);
-    });
+    // Only init the map if it doesn't exist yet — calling initHiderMap() on every
+    // poll destroys and recreates the map each time, causing constant zoom resets
+    if (!hiderMap) {
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          initHiderMap();
+          if (state.gameData) updateHiderMap(state.gameData);
+        }, 150);
+      });
+    }
   }
 }
 
@@ -273,7 +276,10 @@ function routeToScreen(game) {
 
   } else if (game.status === "seek") {
     if (game.hiderId === state.profile.id) {
-      showScreen("hiderSeekScreen");
+      // Only call showScreen (which would re-init the map) on transition, not every poll
+      if (lastRoutedStatus !== "seek") {
+        showScreen("hiderSeekScreen");
+      }
       renderHiderSeekScreen(game);
     } else {
       showScreen("seekMapScreen");

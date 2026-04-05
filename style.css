@@ -806,8 +806,8 @@ input::placeholder { color: var(--muted); }
 /* Small exit button for map/hider screens — top right, below ask button */
 .exit-btn {
   position: absolute;
-  top: calc(14px + var(--safe-top));
-  right: calc(84px + var(--safe-right)); /* sits left of the Ask button */
+  top: calc(76px + var(--safe-top)); /* below the elapsed badge, same left side */
+  left: calc(14px + var(--safe-left));
   background: rgba(13,13,31,0.92);
   color: var(--muted);
   border: 1px solid var(--border);
