@@ -75,6 +75,7 @@ async function tryResumeSession() {
     startPollingFast();
   }
 
+  lastRoutedStatus = game.status; // prevent lobby from resetting hider selection on resume
   routeToScreen(game);
   return true;
 }
@@ -585,7 +586,19 @@ function updateSeekerMarkers(game) {
 
 async function leaveGame() {
   if (!confirm("Leave this game? You can rejoin with the same game ID.")) return;
-  resetToSplash();
+  // Only clear gameId — keep profile in localStorage so rejoin works after page refresh
+  state.gameId = null;
+  state.gameData = null;
+  selectedHiderId = null;
+  try { localStorage.setItem("jl_gameId", ""); } catch(e) {}
+  stopPollingFast();
+  if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  elapsedClockStarted = false;
+  localHideEnd = null;
+  lastRoutedStatus = null;
+  document.getElementById("splashScreen").style.display = "";
+  showScreen("__none__");
 }
 
 // ---------- Close Room ----------
@@ -669,12 +682,6 @@ async function pollState() {
     if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
     stopPollingFast();
     localHideEnd = null;
-  }
-
-  // If we locally transitioned to seek but server hasn't caught up yet, don't flicker back
-  if (game.status === "hide" && state.gameData && state.gameData.status === "seek") {
-    console.log("[Poll] Server still in hide, we're already in seek — skipping route");
-    return;
   }
 
   routeToScreen(game);
