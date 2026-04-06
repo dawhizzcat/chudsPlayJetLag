@@ -713,7 +713,7 @@ input::placeholder { color: var(--muted); }
 
 #versionInfo {
   position: fixed;
-  bottom: max(20px, env(safe-area-inset-bottom));
+  bottom: max(40px, env(safe-area-inset-bottom));
   left: max(10px, env(safe-area-inset-left));
   font-size: 12px;
   padding: 6px 10px;
