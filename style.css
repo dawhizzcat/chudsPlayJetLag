@@ -710,6 +710,24 @@ input::placeholder { color: var(--muted); }
    margin: 0;
    overflow: hidden;
 }
+
+#versionInfo {
+  position: fixed;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  right: max(10px, env(safe-area-inset-left));
+  font-size: 12px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border-radius: 6px;
+  z-index: 999999; /* 🔥 increase this */
+  pointer-events: none;
+  font-family: sans-serif;
+   margin: 0;
+   overflow: hidden;
+}
+
+
 /* ---- Car Mode Toggle ---- */
 .toggle-row {
   display: flex;
