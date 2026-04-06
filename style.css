@@ -713,14 +713,14 @@ input::placeholder { color: var(--muted); }
 
 #versionInfo {
   position: fixed;
-  bottom: max(10px, env(safe-area-inset-bottom));
-  right: max(10px, env(safe-area-inset-left));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  left: max(10px, env(safe-area-inset-left));
   font-size: 12px;
   padding: 6px 10px;
   background: rgba(0, 0, 0, 0.6);
   color: white;
   border-radius: 6px;
-  z-index: 999999; /* 🔥 increase this */
+  z-index: 999999;
   pointer-events: none;
   font-family: sans-serif;
    margin: 0;
