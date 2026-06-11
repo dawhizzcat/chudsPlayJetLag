@@ -87,11 +87,25 @@ html, body {
 .splash-form {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 16px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 24px;
+}
+
+.splash-hint {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+.splash-tagline {
+  color: var(--muted);
+  font-size: 14px;
+  margin-top: 4px;
 }
 
 .form-group {

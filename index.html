@@ -19,28 +19,28 @@
     <div class="splash-logo">
       <div class="splash-icon">🧭</div>
       <h1>Jet Lag</h1>
-      <p></p>
+      <p class="splash-tagline">Hide &amp; Seek, anywhere.</p>
     </div>
 
     <div class="splash-form">
       <div class="form-group">
-        <label class="form-label">Name</label>
-        <input id="nameInput" type="text" placeholder="Profile Name"
+        <label class="form-label">Your Name</label>
+        <input id="nameInput" type="text" placeholder="Enter your name"
                autocomplete="off" autocorrect="off" spellcheck="false">
-        <button class="btn btn-secondary" onclick="createProfile()">Create Profile</button>
       </div>
-
-      <div class="form-divider"><span></span></div>
 
       <div class="form-group">
-        <label class="form-label">Game ID</label>
-        <input id="gameIdInput" type="text" placeholder="Enter game code"
+        <label class="form-label">Game Code</label>
+        <input id="gameIdInput" type="text" placeholder="e.g. saturday"
                autocomplete="off" autocorrect="off" spellcheck="false">
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="createGameFromInput()">Create Game</button>
-          <button class="btn btn-outline" onclick="joinGame()">Join Game</button>
-        </div>
       </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="createGameFromInput()">Create Game</button>
+        <button class="btn btn-outline" onclick="joinGame()">Join Game</button>
+      </div>
+
+      <p class="splash-hint">Create a game to be the host. Others join with the same code.</p>
     </div>
   </div>
 </div>

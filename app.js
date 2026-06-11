@@ -1,69 +1,69 @@
 initMap();
 
 // ---------- Session Persistence ----------
-// Save profile + gameId to localStorage so page refresh / phone kill doesn't lose the session
+// Save name + gameId to localStorage so page refresh / phone kill doesn't lose the session.
+// No profile object needed — the player ID is derived server-side from name+gameId.
 
 function saveSession() {
   try {
-    localStorage.setItem("jl_profile", JSON.stringify(state.profile));
+    if (state.profile) localStorage.setItem("jl_name", state.profile.name);
     localStorage.setItem("jl_gameId", state.gameId || "");
   } catch(e) {}
 }
 
 function clearSession() {
   try {
-    localStorage.removeItem("jl_profile");
     localStorage.removeItem("jl_gameId");
+    // Intentionally keep jl_name so the input is pre-filled on next visit
   } catch(e) {}
 }
 
 function loadSession() {
   try {
-    const p = localStorage.getItem("jl_profile");
-    const g = localStorage.getItem("jl_gameId");
-    if (p) state.profile = JSON.parse(p);
-    if (g) state.gameId = g || null;
-  } catch(e) {}
+    const name   = localStorage.getItem("jl_name");
+    const gameId = localStorage.getItem("jl_gameId");
+    if (name) document.getElementById("nameInput").value = name;
+    if (gameId) state.gameId = gameId || null;
+    return { name: name || null, gameId: gameId || null };
+  } catch(e) { return {}; }
 }
 
-// On page load: restore session and silently rejoin if we have a gameId
+// On page load: restore session and silently rejoin if we have name+gameId
 async function tryResumeSession() {
-  loadSession();
-  if (!state.profile || !state.gameId) {
+  const { name, gameId } = loadSession();
+  if (!name || !gameId) {
     document.getElementById("splashScreen").style.display = "";
     return false;
   }
 
-  console.log("[Session] Attempting silent rejoin:", state.gameId);
+  console.log("[Session] Attempting silent rejoin:", gameId, "as", name);
 
-  let game;
+  let resp;
   try {
-    // Re-join to make sure we're in the player list (idempotent on backend)
-    game = await apiPost("/game/join", {
-      gameId: state.gameId,
-      player: { id: state.profile.id, name: state.profile.name }
-    });
+    resp = await apiPost("/game/join", { gameId, name });
   } catch(e) {
     console.warn("[Session] Rejoin network error:", e);
     document.getElementById("splashScreen").style.display = "";
     return false;
   }
 
-  if (!game || game.error) {
-    // Game is gone — clear stale session silently
-    console.log("[Session] Game not found, clearing session");
+  if (!resp || resp.error) {
+    console.log("[Session] Game not found or error, clearing gameId");
     clearSession();
     state.gameId = null;
     document.getElementById("splashScreen").style.display = "";
     return false;
   }
 
-  console.log("[Session] Rejoined successfully, status:", game.status);
+  const { game, profile } = resp;
+  state.profile = profile;
+  state.gameId  = gameId;
   state.gameData = game;
+  saveSession();
 
+  console.log("[Session] Rejoined successfully, status:", game.status);
   hideSplash();
 
-  // Restore timers if mid-round
   if ((game.status === "hide" || game.status === "seek") && game.hideStart) {
     if (!elapsedClockStarted) {
       elapsedClockStarted = true;
@@ -75,7 +75,7 @@ async function tryResumeSession() {
     startPollingFast();
   }
 
-  lastRoutedStatus = game.status; // prevent lobby from resetting hider selection on resume
+  lastRoutedStatus = game.status;
   routeToScreen(game);
   return true;
 }
@@ -133,40 +133,32 @@ function startElapsedClock(hideStart) {
 // ---------- Offline Guard ----------
 
 function isOffline() {
-  // navigator.onLine is fast but not always accurate — we also track
-  // server reachability via serverOnline flag updated by checkServerStatus
   return !navigator.onLine || !serverOnline;
 }
 
-async function createProfile() {
-  if (isOffline()) { alert("You appear to be offline. Check your connection and try again."); return; }
-  const name = document.getElementById("nameInput").value.trim() || "Player";
-  const profile = await apiPost("/profile/create", { name });
-  if (!profile || profile.error || !profile.id) {
-    alert("Failed to create profile: " + (profile?.error || "Unknown error"));
-    return;
-  }
-  state.profile = profile;
-  saveSession(); // persist immediately
-  alert(`Profile created! Welcome, ${profile.name}`);
+function getNameAndGameId() {
+  const name   = document.getElementById("nameInput").value.trim();
+  const gameId = document.getElementById("gameIdInput").value.trim();
+  if (!name)   { alert("Please enter your name."); return null; }
+  if (!gameId) { alert("Please enter a game code."); return null; }
+  return { name, gameId };
 }
 
 async function createGameFromInput() {
   if (isOffline()) { alert("You appear to be offline. Check your connection and try again."); return; }
-  const inputGameId = document.getElementById("gameIdInput").value.trim();
-  if (!inputGameId) return alert("Please enter a game ID.");
-  if (!state.profile) return alert("Please create a profile first.");
-  state.gameId = inputGameId;
-  const game = await apiPost("/game/create", { gameId: state.gameId, hostId: state.profile.id });
-  if (!game || game.error) {
-    alert("Failed to create game: " + (game?.error || "Unknown error"));
-    state.gameId = null;
+  const inputs = getNameAndGameId();
+  if (!inputs) return;
+  const { name, gameId } = inputs;
+
+  const resp = await apiPost("/game/create", { gameId, name });
+  if (!resp || resp.error) {
+    alert("Failed to create game: " + (resp?.error || "Unknown error"));
     return;
   }
-  await apiPost("/game/join", {
-    gameId: state.gameId,
-    player: { id: state.profile.id, name: state.profile.name }
-  });
+  const { game, profile } = resp;
+  state.profile = profile;
+  state.gameId  = gameId;
+  state.gameData = game;
   saveSession();
   hideSplash();
   showScreen("hostScreen");
@@ -174,24 +166,22 @@ async function createGameFromInput() {
 
 async function joinGame() {
   if (isOffline()) { alert("You appear to be offline. Check your connection and try again."); return; }
-  if (!state.profile) return alert("Create a profile first!");
-  const inputGameId = document.getElementById("gameIdInput").value.trim();
-  if (!inputGameId) return alert("Enter a game ID!");
-  state.gameId = inputGameId;
-  const game = await apiPost("/game/join", {
-    gameId: state.gameId,
-    player: { id: state.profile.id, name: state.profile.name }
-  });
-  if (!game || game.error) {
-    alert("Failed to join: " + (game?.error || "Unknown error"));
-    state.gameId = null;
+  const inputs = getNameAndGameId();
+  if (!inputs) return;
+  const { name, gameId } = inputs;
+
+  const resp = await apiPost("/game/join", { gameId, name });
+  if (!resp || resp.error) {
+    alert("Failed to join: " + (resp?.error || "Unknown error"));
     return;
   }
-
+  const { game, profile } = resp;
+  state.profile = profile;
+  state.gameId  = gameId;
+  state.gameData = game;
   saveSession();
 
   if (game.status === "hide" || game.status === "seek") {
-    state.gameData = game;
     hideSplash();
     if (game.hideStart && !elapsedClockStarted) {
       elapsedClockStarted = true;
@@ -206,7 +196,7 @@ async function joinGame() {
   }
 
   hideSplash();
-  if (game.hostId === state.profile.id) {
+  if (game.hostId === profile.id) {
     showScreen("hostScreen");
   } else {
     showScreen("waitingScreen");
@@ -687,12 +677,11 @@ function updateSeekerMarkers(game) {
 // ---------- Leave Game ----------
 
 async function leaveGame() {
-  if (!confirm("Leave this game? You can rejoin with the same game ID.")) return;
-  // Only clear gameId — keep profile in localStorage so rejoin works after page refresh
+  if (!confirm("Leave this game? You can rejoin with the same name and game code.")) return;
+  clearSession(); // clears gameId, keeps name
   state.gameId = null;
   state.gameData = null;
   selectedHiderId = null;
-  try { localStorage.setItem("jl_gameId", ""); } catch(e) {}
   stopPollingFast();
   if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
@@ -722,7 +711,7 @@ function resetToSplash() {
   state.gameId = null;
   state.gameData = null;
   selectedHiderId = null;
-  clearSession();           // wipe localStorage so we don't re-rejoin a dead game
+  clearSession();  // clears gameId only, keeps name pre-filled
   stopPollingFast();
   if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
@@ -850,14 +839,12 @@ async function checkServerStatus() {
     // Only act after 2 consecutive failures to avoid false positives
     if (offlineStrikes >= 2) {
       serverOnline = false;
-      // If we're in a game, silently leave (session preserved so they can rejoin)
       if (state.gameId) {
         console.warn("[Offline] Server unreachable — leaving room to prevent stuck state");
-        // Same as leaveGame() but without the confirm dialog
+        clearSession(); // clears gameId, keeps name
         state.gameId = null;
         state.gameData = null;
         selectedHiderId = null;
-        try { localStorage.setItem("jl_gameId", ""); } catch(err) {}
         stopPollingFast();
         if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
         if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
