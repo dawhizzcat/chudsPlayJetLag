@@ -240,7 +240,7 @@ function showScreen(screenId) {
     requestAnimationFrame(() => {
       setTimeout(() => {
         initHiderMap();
-        if (state.gameData) updateHiderMap(state.gameData);
+        if (state.gameData) updateHiderMap(state.gameData, state.profile.id);
       }, 150);
     });
   }
@@ -589,7 +589,7 @@ async function foundHider() {
 function renderHiderSeekScreen(game) {
   renderHiderQuestions(game);
   renderHiderCards(game);
-  updateHiderMap(game);
+  updateHiderMap(game, state.profile.id);
   const bonus = game.bonusTime || 0;
   const badge = document.getElementById("bonusBadge");
   const bonusSec = document.getElementById("bonusSeconds");
@@ -677,9 +677,11 @@ async function playCard(cardId) {
 function updateSeekerMarkers(game) {
   const seekerPositions = {};
   for (const [id, pos] of Object.entries(game.positions)) {
+    // Never show the hider's pin on the seeker map, even if hiderId is null
+    // (round just ended) — filtering by strict equality means null never matches
     if (id !== game.hiderId) seekerPositions[id] = pos;
   }
-  updateMarkers(seekerPositions, game.players);
+  updateMarkers(seekerPositions, game.players, state.profile.id);
 }
 
 // ---------- Leave Game ----------
@@ -704,6 +706,7 @@ async function leaveGame() {
 // ---------- Close Room ----------
 
 async function closeRoom() {
+  if (isOffline()) { alert("You appear to be offline. Check your connection and try again."); return; }
   if (!confirm("Close this room? All game data will be deleted.")) return;
   const result = await apiPost("/game/close", {
     gameId: state.gameId, hostId: state.profile.id
@@ -794,7 +797,11 @@ async function pollState() {
   routeToScreen(game);
 }
 
-setInterval(pollState, 5000);
+// Slow background poll — only fires when the fast poll isn't running (i.e. lobby/idle).
+// During seek/hide the fast poll at 1s already covers state updates.
+setInterval(() => {
+  if (!fastPollInterval) pollState();
+}, 5000);
 
 // ---------- GPS ----------
 
@@ -807,7 +814,16 @@ navigator.geolocation.watchPosition(pos => {
     gameId: state.gameId, playerId: state.profile.id,
     lat: pos.coords.latitude, lng: pos.coords.longitude
   });
-}, err => console.warn("[GPS] watchPosition error:", err), {
+}, err => {
+  console.warn("[GPS] watchPosition error:", err);
+  if (err.code === 1) { // PERMISSION_DENIED
+    // Only alert once per page load so we don't spam on every poll cycle
+    if (!navigator._jlGpsDeniedAlerted) {
+      navigator._jlGpsDeniedAlerted = true;
+      alert("Location access was denied. Distance/direction questions won't auto-answer and your pin won't appear on the map. You can re-enable location in your browser settings.");
+    }
+  }
+}, {
   enableHighAccuracy: true, maximumAge: 10000
 });
 

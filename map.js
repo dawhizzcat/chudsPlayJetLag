@@ -34,7 +34,7 @@ function initHiderMap() {
   }).addTo(hiderMap);
 }
 
-function updateHiderMap(game) {
+function updateHiderMap(game, myId) {
   if (!hiderMap) return;
 
   // All players, labeled by name
@@ -52,7 +52,8 @@ function updateHiderMap(game) {
     if (!pos.lat || !pos.lng) continue;
     const label = nameMap[id] || id.slice(0, 6);
     const isHider = id === game.hiderId;
-    const dotClass = isHider ? "marker-dot marker-dot-hider" : "marker-dot";
+    // Three tiers: hider = green dot, seekers = orange dot
+    const dotClass = isHider ? "marker-dot marker-dot-hider" : "marker-dot marker-dot-seeker";
     const html = `<div class="player-marker"><div class="${dotClass}"></div><div class="marker-label">${label}</div></div>`;
     const icon = L.divIcon({ className: '', html, iconAnchor: [20, 20] });
 
@@ -104,10 +105,14 @@ function updateHiderMap(game) {
 }
 
 // players is optional array of {id, name} for labeling
-function updateMarkers(positions, players) {
+// myId is the local player — shown with a distinct "you" dot style
+function updateMarkers(positions, players, myId) {
   const nameMap = {};
   if (players) players.forEach(p => nameMap[p.id] = p.name);
 
+  // Remove any marker whose id is absent from the incoming positions.
+  // This is the critical cleanup that prevents stale hider pins from
+  // persisting on the seeker map across round transitions.
   for (const id in markers) {
     if (!positions[id]) {
       markers[id].remove();
@@ -117,17 +122,30 @@ function updateMarkers(positions, players) {
 
   for (const id in positions) {
     const pos = positions[id];
+    if (!pos.lat || !pos.lng) continue;
     const label = nameMap[id] || id.slice(0, 6);
+    const isMe = id === myId;
+    const dotClass = isMe ? "marker-dot marker-dot-me" : "marker-dot";
 
     if (!markers[id]) {
       const icon = L.divIcon({
         className: '',
-        html: `<div class="player-marker"><div class="marker-dot"></div><div class="marker-label">${label}</div></div>`,
+        html: `<div class="player-marker"><div class="${dotClass}"></div><div class="marker-label">${label}</div></div>`,
         iconAnchor: [20, 20]
       });
       markers[id] = L.marker([pos.lat, pos.lng], { icon }).addTo(map);
+      markers[id]._jetlagDotClass = dotClass;
     } else {
       markers[id].setLatLng([pos.lat, pos.lng]);
+      if (markers[id]._jetlagDotClass !== dotClass) {
+        const icon = L.divIcon({
+          className: '',
+          html: `<div class="player-marker"><div class="${dotClass}"></div><div class="marker-label">${label}</div></div>`,
+          iconAnchor: [20, 20]
+        });
+        markers[id].setIcon(icon);
+        markers[id]._jetlagDotClass = dotClass;
+      }
     }
   }
 }

@@ -841,4 +841,17 @@ input::placeholder { color: var(--muted); }
   -webkit-appearance: none;
   white-space: nowrap;
 }
+
+/* Seeker dots on the hider's map — orange/red */
+.marker-dot-seeker {
+  background-color: #f97316; /* orange-500 */
+  border-color: #ea580c;
+}
+
+/* "You" dot on the seeker map */
+.marker-dot-me {
+  background-color: #ffffff;
+  border-color: #94a3b8;
+}
+
 .exit-btn:active { opacity: 0.7; }
