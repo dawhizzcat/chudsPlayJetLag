@@ -29,6 +29,8 @@ function loadSession() {
 }
 
 // On page load: restore session and silently rejoin if we have name+gameId
+let _sessionResumeActive = false; // prevents stale resume from overwriting a fresh join
+
 async function tryResumeSession() {
   const { name, gameId } = loadSession();
   if (!name || !gameId) {
@@ -37,15 +39,21 @@ async function tryResumeSession() {
   }
 
   console.log("[Session] Attempting silent rejoin:", gameId, "as", name);
+  _sessionResumeActive = true;
 
   let resp;
   try {
     resp = await apiPost("/game/join", { gameId, name });
   } catch(e) {
     console.warn("[Session] Rejoin network error:", e);
+    _sessionResumeActive = false;
     document.getElementById("splashScreen").style.display = "";
     return false;
   }
+
+  // If the user already tapped Create/Join while this was in-flight, bail out.
+  if (!_sessionResumeActive) return false;
+  _sessionResumeActive = false;
 
   if (!resp || resp.error) {
     console.log("[Session] Game not found or error, clearing gameId");
@@ -150,6 +158,8 @@ async function createGameFromInput() {
   if (!inputs) return;
   const { name, gameId } = inputs;
 
+  _sessionResumeActive = false; // cancel any in-flight silent rejoin
+
   const resp = await apiPost("/game/create", { gameId, name });
   if (!resp || resp.error) {
     alert("Failed to create game: " + (resp?.error || "Unknown error"));
@@ -169,6 +179,8 @@ async function joinGame() {
   const inputs = getNameAndGameId();
   if (!inputs) return;
   const { name, gameId } = inputs;
+
+  _sessionResumeActive = false; // cancel any in-flight silent rejoin
 
   const resp = await apiPost("/game/join", { gameId, name });
   if (!resp || resp.error) {
