@@ -50,10 +50,12 @@ function updateHiderMap(game, myId) {
   for (const id in positions) {
     const pos = positions[id];
     if (!pos.lat || !pos.lng) continue;
-    const label = nameMap[id] || id.slice(0, 6);
+    const name = nameMap[id] || id.slice(0, 6);
     const isHider = id === game.hiderId;
     // Three tiers: hider = green dot, seekers = orange dot
     const dotClass = isHider ? "marker-dot marker-dot-hider" : "marker-dot marker-dot-seeker";
+    const roleTag = isHider ? " <span class='marker-role'>(Hider)</span>" : " <span class='marker-role'>(Seeker)</span>";
+    const label = name + roleTag;
     const html = `<div class="player-marker"><div class="${dotClass}"></div><div class="marker-label">${label}</div></div>`;
     const icon = L.divIcon({ className: '', html, iconAnchor: [20, 20] });
 
@@ -123,9 +125,11 @@ function updateMarkers(positions, players, myId) {
   for (const id in positions) {
     const pos = positions[id];
     if (!pos.lat || !pos.lng) continue;
-    const label = nameMap[id] || id.slice(0, 6);
+    const name = nameMap[id] || id.slice(0, 6);
     const isMe = id === myId;
     const dotClass = isMe ? "marker-dot marker-dot-me" : "marker-dot";
+    const roleTag = isMe ? " <span class='marker-role'>(You)</span>" : " <span class='marker-role'>(Seeker)</span>";
+    const label = name + roleTag;
 
     if (!markers[id]) {
       const icon = L.divIcon({

@@ -188,7 +188,7 @@ input::placeholder { color: var(--muted); }
   inset: 0;
   z-index: 500;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: rgba(8,8,20,0.9);
   backdrop-filter: blur(6px);
@@ -196,6 +196,15 @@ input::placeholder { color: var(--muted); }
   padding: 20px;
   padding-top: calc(20px + var(--safe-top));
   padding-bottom: calc(20px + var(--safe-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Center vertically only when content is short enough to fit */
+#waitingScreen,
+#hiderScreen,
+#seekerScreen {
+  align-items: center;
 }
 
 .screen-card {
@@ -209,9 +218,9 @@ input::placeholder { color: var(--muted); }
   box-shadow: 0 12px 48px rgba(0,0,0,0.6);
 }
 .screen-card.scrollable {
-  max-height: calc(100vh - 40px - var(--safe-top) - var(--safe-bottom));
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  /* The outer screen container is now the scroll root, so the card
+     just needs to be full-width with no artificial height cap. */
+  width: 100%;
 }
 .screen-card h2 {
   font-size: 1.5rem;
@@ -322,13 +331,18 @@ input::placeholder { color: var(--muted); }
   flex-direction: column;
   padding-top: calc(60px + var(--safe-top));
   padding-bottom: var(--safe-bottom);
+  /* Prevent the outer container from growing beyond the viewport */
+  overflow: hidden;
 }
 
 .hider-scroll-area {
   flex: 1;
+  /* min-height: 0 is required for overflow-y: auto to work inside a flex child */
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 16px;
+  /* Extra bottom padding so content clears the safe area */
+  padding: 16px 16px calc(16px + var(--safe-bottom));
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -694,6 +708,11 @@ input::placeholder { color: var(--muted); }
   white-space: nowrap;
   box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
+.marker-role {
+  font-weight: 400;
+  font-size: 10px;
+  opacity: 0.7;
+}
 
 #serverStatus {
   position: fixed;
@@ -803,7 +822,7 @@ input::placeholder { color: var(--muted); }
 .hider-map-panel { padding-bottom: 0; overflow: hidden; }
 #hiderMapDiv {
   width: 100%;
-  height: 300px;
+  height: 380px;
   border-radius: 10px;
   overflow: hidden;
 }
