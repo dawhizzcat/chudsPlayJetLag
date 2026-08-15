@@ -73,9 +73,9 @@ async function tryResumeSession() {
   hideSplash();
 
   if ((game.status === "hide" || game.status === "seek") && game.hideStart) {
-    if (!elapsedClockStarted) {
+    if (game.status === "seek" && !elapsedClockStarted) {
       elapsedClockStarted = true;
-      startElapsedClock(game.hideStart);
+      startElapsedClock(getSeekStart(game));
     }
     if (game.status === "hide" && game.hideTime) {
       startLocalTimer(game.hideStart, game.hideTime);
@@ -93,6 +93,15 @@ async function tryResumeSession() {
 let timerInterval = null;
 let localHideEnd = null;
 let elapsedInterval = null;
+
+// The moment seeking actually starts — hideStart is when the ROUND starts
+// (hiding begins), not when seekers start looking. The "hidden time" shown
+// to players, and the score recorded on found(), should both count from
+// here, not from the start of the head-start hiding period.
+function getSeekStart(game) {
+  if (game && game.hideStart && game.hideTime) return game.hideStart + game.hideTime;
+  return game ? game.hideStart : null;
+}
 
 function startLocalTimer(hideStart, hideTime) {
   const endTime = (hideStart * 1000) + (hideTime * 1000);
@@ -112,9 +121,10 @@ function startLocalTimer(hideStart, hideTime) {
       if (state.gameData) {
         state.gameData.status = "seek";
         routeToScreen(state.gameData);
-        if (!elapsedClockStarted && state.gameData.hideStart) {
+        if (!elapsedClockStarted) {
           elapsedClockStarted = true;
-          startElapsedClock(state.gameData.hideStart);
+          // The hide timer just hit zero — seeking starts right now.
+          startElapsedClock(getSeekStart(state.gameData) || (Date.now() / 1000));
         }
       }
       pollState();
@@ -122,10 +132,10 @@ function startLocalTimer(hideStart, hideTime) {
   }, 1000);
 }
 
-function startElapsedClock(hideStart) {
+function startElapsedClock(seekStart) {
   if (elapsedInterval) clearInterval(elapsedInterval);
   elapsedInterval = setInterval(() => {
-    const elapsed = Math.floor(Date.now() / 1000 - hideStart);
+    const elapsed = Math.max(0, Math.floor(Date.now() / 1000 - seekStart));
     const mins = Math.floor(elapsed / 60);
     const secs = String(elapsed % 60).padStart(2, "0");
     const str = `${mins}:${secs}`;
@@ -195,9 +205,9 @@ async function joinGame() {
 
   if (game.status === "hide" || game.status === "seek") {
     hideSplash();
-    if (game.hideStart && !elapsedClockStarted) {
+    if (game.status === "seek" && game.hideStart && !elapsedClockStarted) {
       elapsedClockStarted = true;
-      startElapsedClock(game.hideStart);
+      startElapsedClock(getSeekStart(game));
     }
     if (game.status === "hide" && game.hideStart && game.hideTime) {
       startLocalTimer(game.hideStart, game.hideTime);
@@ -634,6 +644,10 @@ async function answerQuestion(questionId, answer) {
   if (state.gameData) {
     const q = state.gameData.questions.find(q => q.id === questionId);
     if (q) q.answer = answer;
+    if (result.overlay) {
+      state.gameData.overlays = state.gameData.overlays || [];
+      state.gameData.overlays.push(result.overlay);
+    }
     renderHiderSeekScreen(state.gameData);
   }
 }
@@ -777,9 +791,9 @@ async function pollState() {
   }
   state.gameData = game;
 
-  if ((game.status === "hide" || game.status === "seek") && game.hideStart && !elapsedClockStarted) {
+  if (game.status === "seek" && game.hideStart && !elapsedClockStarted) {
     elapsedClockStarted = true;
-    startElapsedClock(game.hideStart);
+    startElapsedClock(getSeekStart(game));
   }
   if (game.status === "hide" && game.hideStart && game.hideTime) {
     startLocalTimer(game.hideStart, game.hideTime);
