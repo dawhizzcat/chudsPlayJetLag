@@ -807,10 +807,32 @@ setInterval(() => {
 // ---------- GPS ----------
 
 let lastKnownPos = null; // cached so auto-questions work without a fresh GPS call
+let lastSentPos = null;
+let lastSentTime = 0;
+const MIN_SEND_INTERVAL_MS = 8000; // send at least this often even if not moving
+const MIN_SEND_DISTANCE_M = 15;    // or immediately if moved this far
+
+function distMeters(a, b) {
+  const R = 6371000;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const la1 = a.lat * Math.PI / 180, la2 = b.lat * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
 
 navigator.geolocation.watchPosition(pos => {
   lastKnownPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
   if (!state.gameId || !state.profile) return;
+
+  const now = Date.now();
+  const movedEnough = !lastSentPos || distMeters(lastSentPos, lastKnownPos) >= MIN_SEND_DISTANCE_M;
+  const timeElapsed = now - lastSentTime >= MIN_SEND_INTERVAL_MS;
+  if (!movedEnough && !timeElapsed) return; // throttled — no meaningful change worth a request
+
+  lastSentPos = lastKnownPos;
+  lastSentTime = now;
+
   apiPost("/position/update", {
     gameId: state.gameId, playerId: state.profile.id,
     lat: pos.coords.latitude, lng: pos.coords.longitude
@@ -831,7 +853,14 @@ navigator.geolocation.watchPosition(pos => {
 // ---------- Server Status ----------
 
 let serverOnline = true; // tracks last known server reachability
-let offlineStrikes = 0;  // require 2 consecutive failures before acting (avoids single blip)
+let offlineStrikes = 0;
+
+// Cellular connections drop for a second or two constantly — that's normal,
+// not an outage. Don't alarm the user (or touch their session) until a real
+// pattern of failure shows up, and never force-reset someone out of a live
+// hide/seek round just because of a brief blip.
+const RECONNECT_BANNER_STRIKES = 3;   // ~9s of failures before showing "Reconnecting"
+const FORCE_RESET_STRIKES = 20;       // ~60s of failures before we give up and reset
 
 async function checkServerStatus() {
   const el = document.getElementById("serverStatus");
@@ -846,27 +875,39 @@ async function checkServerStatus() {
     offlineStrikes = 0;
   } catch (e) {
     offlineStrikes++;
-    el.textContent = "Server: Offline";
-    el.style.background = "rgba(150, 0, 0, 0.7)";
-    // Only act after 2 consecutive failures to avoid false positives
-    if (offlineStrikes >= 2) {
-      serverOnline = false;
-      if (state.gameId) {
-        console.warn("[Offline] Server unreachable — leaving room to prevent stuck state");
-        clearSession(); // clears gameId, keeps name
-        state.gameId = null;
-        state.gameData = null;
-        selectedHiderId = null;
-        stopPollingFast();
-        if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
-        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-        elapsedClockStarted = false;
-        localHideEnd = null;
-        lastRoutedStatus = null;
-        document.getElementById("splashScreen").style.display = "";
-        showScreen("__none__");
-        alert("Lost connection to server. You have been returned to the lobby. Rejoin when back online.");
-      }
+
+    if (offlineStrikes < RECONNECT_BANNER_STRIKES) {
+      return; // single blip — say nothing, just retry next tick
+    }
+
+    el.textContent = "Server: Reconnecting...";
+    el.style.background = "rgba(150, 100, 0, 0.7)";
+    serverOnline = false;
+
+    const inActiveRound = state.gameData &&
+      (state.gameData.status === "hide" || state.gameData.status === "seek");
+
+    // Never auto-kick out of an active round — fast polling resumes on its
+    // own once the network comes back. Only fall back to a hard reset if
+    // we've been unreachable for a long time AND the player was just idle
+    // in the lobby (nothing actively in-flight to lose).
+    if (state.gameId && !inActiveRound && offlineStrikes >= FORCE_RESET_STRIKES) {
+      console.warn("[Offline] Unreachable for an extended period while idle — returning to lobby");
+      el.textContent = "Server: Offline";
+      el.style.background = "rgba(150, 0, 0, 0.7)";
+      clearSession(); // clears gameId, keeps name
+      state.gameId = null;
+      state.gameData = null;
+      selectedHiderId = null;
+      stopPollingFast();
+      if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      elapsedClockStarted = false;
+      localHideEnd = null;
+      lastRoutedStatus = null;
+      document.getElementById("splashScreen").style.display = "";
+      showScreen("__none__");
+      alert("Lost connection to server for an extended period. You have been returned to the lobby.");
     }
   }
 }
