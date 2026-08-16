@@ -19,19 +19,19 @@
     <div class="splash-logo">
       <div class="splash-icon">🧭</div>
       <h1>Jet Lag</h1>
-      <p class="splash-tagline">Hide &amp; Seek, anywhere.</p>
+      <p class="splash-tagline">Large Hide &amp; Seek</p>
     </div>
 
     <div class="splash-form">
       <div class="form-group">
-        <label class="form-label">Your Name</label>
-        <input id="nameInput" type="text" placeholder="Enter your name"
+        <label class="form-label">Username</label>
+        <input id="nameInput" type="text" placeholder="Enter your username"
                autocomplete="off" autocorrect="off" spellcheck="false">
       </div>
 
       <div class="form-group">
         <label class="form-label">Game Code</label>
-        <input id="gameIdInput" type="text" placeholder="e.g. saturday"
+        <input id="gameIdInput" type="text" placeholder="e.g. game67"
                autocomplete="off" autocorrect="off" spellcheck="false">
       </div>
 
@@ -40,7 +40,7 @@
         <button class="btn btn-outline" onclick="joinGame()">Join Game</button>
       </div>
 
-      <p class="splash-hint">Create a game to be the host. Others join with the same code.</p>
+      <p class="splash-hint">Create a game to host, or join a game with a code.</p>
     </div>
   </div>
 </div>
@@ -50,7 +50,7 @@
   <div class="screen-card">
     <div class="waiting-icon">⏳</div>
     <h2>Waiting for host...</h2>
-    <p class="screen-subtitle">The host will start the game soon.</p>
+    <p class="screen-subtitle">The host will start the game.</p>
     <button class="btn btn-leave" onclick="leaveGame()">← Leave Game</button>
   </div>
 </div>
@@ -58,7 +58,7 @@
 <!-- Host lobby screen -->
 <div id="hostScreen" style="display:none;">
   <div class="screen-card scrollable">
-    <h2>🎮 Lobby</h2>
+    <h2>Lobby</h2>
 
     <div id="scoresPanel" class="scores-panel">
       <h3>Hider Times</h3>
@@ -75,7 +75,7 @@
     </label>
 
     <label class="form-label toggle-row">
-      Car Mode 🚗
+      Car Mode
       <div class="toggle-wrap">
         <input type="checkbox" id="carModeToggle" class="toggle-input">
         <span class="toggle-slider"></span>
@@ -84,7 +84,7 @@
 
     <p class="section-label">Select a hider:</p>
     <div id="hostPlayerList"></div>
-    <button id="startGameBtn" style="display:none;" class="btn btn-start" onclick="startGameRound()">🚀 Start Game</button>
+    <button id="startGameBtn" style="display:none;" class="btn btn-start" onclick="startGameRound()">Start Game</button>
     <button class="btn btn-danger" onclick="closeRoom()">🗑 Close Room</button>
   </div>
 </div>
@@ -93,7 +93,7 @@
 <div id="hiderScreen" style="display:none;">
   <div class="screen-card">
     <h2>You are the Hider!</h2>
-    <p class="screen-subtitle">Go hide before the timer runs out!</p>
+    <p class="screen-subtitle">Get to your hiding place before the timer ends!</p>
     <div class="timer-display">
       <span id="hideTimerHider">0</span>
       <span class="timer-label">to hide</span>
@@ -107,6 +107,7 @@
   <div class="screen-card">
     <h2>You are a Seeker</h2>
     <p class="screen-subtitle">Wait for the hider to hide...</p>
+    <p class="screen-subtitle">Go get a coffee or something</p>
     <div class="timer-display">
       <span id="hideTimerSeeker">0</span>
       <span class="timer-label">until hunt begins</span>
@@ -128,16 +129,16 @@
 
   <div class="hider-scroll-area">
     <div class="hider-panel">
-      <h3>❓ Incoming Questions</h3>
+      <h3>Incoming Questions</h3>
       <div id="hiderQuestionList"><p class="empty-msg">No questions yet...</p></div>
     </div>
     <div class="hider-panel">
-      <h3>🃏 Your Cards</h3>
+      <h3>Your Cards</h3>
       <div id="hiderCardList"><p class="empty-msg">Cards are dealt when seekers ask questions.</p></div>
     </div>
 
     <div class="hider-panel hider-map-panel">
-      <h3>🗺️ Live Map</h3>
+      <h3>Map</h3>
       <div id="hiderMapDiv"></div>
     </div>
   </div>
@@ -152,9 +153,9 @@
     <span class="elapsed-label">hidden</span>
   </div>
 
-  <div id="carModeBadge" style="display:none;" class="car-mode-badge">🚗 Car Mode</div>
+  <div id="carModeBadge" style="display:none;" class="car-mode-badge">Car Mode</div>
 
-  <button class="question-btn" onclick="toggleQuestionMenu()">❓ Ask</button>
+  <button class="question-btn" onclick="toggleQuestionMenu()">Ask</button>
 
   <button class="exit-btn" onclick="leaveGame()">← Exit</button>
 
@@ -208,6 +209,6 @@
 </script>
 
 <div id="serverStatus">Server: Checking...</div>
-<div id="versionInfo">v 1.1.8</div>
+<div id="versionInfo">v 2.7.3</div>
 </body>
 </html>
