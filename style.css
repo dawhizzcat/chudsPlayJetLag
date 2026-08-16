@@ -760,10 +760,9 @@ input::placeholder { color: var(--muted); }
    overflow: hidden;
 }
 
-
-#footerInfo {
+#creditFooter {
   position: fixed;
-  bottom: max(40px, env(safe-area-inset-bottom));
+  bottom: max(10px, env(safe-area-inset-bottom));
   right: max(10px, env(safe-area-inset-right));
   font-size: 12px;
   padding: 6px 10px;
@@ -773,8 +772,8 @@ input::placeholder { color: var(--muted); }
   z-index: 999999;
   pointer-events: none;
   font-family: sans-serif;
-   margin: 0;
-   overflow: hidden;
+  margin: 0;
+  overflow: hidden;
 }
 
 /* ---- Car Mode Toggle ---- */
